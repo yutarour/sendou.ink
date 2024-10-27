@@ -239,4 +239,19 @@ export const homemadeBadges: BadgeInfo[] = [
 		fileName: "cc-smudge",
 		authorDiscordId: "148874365105078272",
 	},
+	{
+		displayName: "Frostbite Ascent",
+		fileName: "frostbitegold2x",
+		authorDiscordId: "354880982890971136",
+	},
+	{
+		displayName: "Frostbite Ascent (Top Bracket)",
+		fileName: "frostbitesilver2x",
+		authorDiscordId: "354880982890971136",
+	},
+	{
+		displayName: "Frostbite Ascent (Top 8)",
+		fileName: "frostbitebase2x",
+		authorDiscordId: "354880982890971136",
+	},
 ];
