@@ -230,6 +230,11 @@ export const homemadeBadges: BadgeInfo[] = [
 		authorDiscordId: "342369454719631361",
 	},
 	{
+		displayName: "Fountain of Dreams",
+		fileName: "fountain_of_dreams",
+		authorDiscordId: "164695301007998979",
+	},
+	{
 		displayName: "Scrap Bin (Smidge)",
 		fileName: "cc-smidge",
 		authorDiscordId: "148874365105078272",
