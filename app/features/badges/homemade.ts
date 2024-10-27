@@ -240,6 +240,11 @@ export const homemadeBadges: BadgeInfo[] = [
 		authorDiscordId: "148874365105078272",
 	},
 	{
+		displayName: "THE GLAZE GAUNTLET",
+		fileName: "glaze",
+		authorDiscordId: "528851510222782474",
+	},
+	{
 		displayName: "Frostbite Ascent",
 		fileName: "frostbitegold2x",
 		authorDiscordId: "354880982890971136",
