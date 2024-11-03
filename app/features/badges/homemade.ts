@@ -309,4 +309,19 @@ export const homemadeBadges: BadgeInfo[] = [
 		fileName: "frostbitebase2x",
 		authorDiscordId: "354880982890971136",
 	},
+	{
+		displayName: "Squeaky Clean Scrap",
+		fileName: "wiper",
+		authorDiscordId: "528851510222782474",
+	},
+	{
+		displayName: "Chi-Shoals",
+		fileName: "chishoals",
+		authorDiscordId: "528851510222782474",
+	},
+	{
+		displayName: "Shark Tank: Deep Waters",
+		fileName: "blahajopen",
+		authorDiscordId: "528851510222782474",
+	},
 ];
