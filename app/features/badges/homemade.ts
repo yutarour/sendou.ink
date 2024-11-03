@@ -15,6 +15,16 @@ export const homemadeBadges: BadgeInfo[] = [
 	// 	authorDiscordId: "123456789012345678",
 	// },
 	{
+		displayName: "Turf War Takedown",
+		fileName: "turf1230",
+		authorDiscordId: "1170249805373657093",
+	},
+	{
+		displayName: "Turf War Takedown (Special)",
+		fileName: "turf12300",
+		authorDiscordId: "1170249805373657093",
+	},
+	{
 		displayName: "Peashooter Achievement",
 		fileName: "peashooter",
 		authorDiscordId: "789943264370884708",
