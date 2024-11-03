@@ -320,6 +320,11 @@ export const homemadeBadges: BadgeInfo[] = [
 		authorDiscordId: "354880982890971136",
 	},
 	{
+		displayName: "Biggest Fish in the Sea",
+		fileName: "bfis",
+		authorDiscordId: "629773997822967819",
+	},
+	{
 		displayName: "Squeaky Clean Scrap",
 		fileName: "wiper",
 		authorDiscordId: "528851510222782474",
