@@ -115,6 +115,21 @@ export const homemadeBadges: BadgeInfo[] = [
 		authorDiscordId: "354880982890971136",
 	},
 	{
+		displayName: "Pinch Zach's Bank",
+		fileName: "pinchzachsbank",
+		authorDiscordId: "528851510222782474",
+	},
+	{
+		displayName: "Pou Basket",
+		fileName: "pou",
+		authorDiscordId: "285896534380511234",
+	},
+	{
+		displayName: "Blue Pou Achievement",
+		fileName: "pou_b",
+		authorDiscordId: "285896534380511234",
+	},
+	{
 		displayName: "Junior's Draft",
 		fileName: "jrs_draft",
 		authorDiscordId: "118724226994667523",
