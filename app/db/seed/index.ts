@@ -465,9 +465,9 @@ function fakeUser(usedNames: Set<string>) {
 }
 
 function uniqueDiscordName(usedNames: Set<string>) {
-	let result = faker.internet.userName();
+	let result = faker.internet.username();
 	while (usedNames.has(result)) {
-		result = faker.internet.userName();
+		result = faker.internet.username();
 	}
 	usedNames.add(result);
 
@@ -1613,7 +1613,7 @@ function otherTeams() {
 				name: teamName,
 				customUrl: teamCustomUrl,
 				inviteCode: nanoid(INVITE_CODE_LENGTH),
-				twitter: faker.internet.userName(),
+				twitter: faker.internet.username(),
 				bio: faker.lorem.paragraph(),
 			});
 
