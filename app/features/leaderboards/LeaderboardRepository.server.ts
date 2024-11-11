@@ -5,6 +5,7 @@ import { COMMON_USER_FIELDS } from "~/utils/kysely.server";
 import { ordinalToSp } from "../mmr/mmr-utils";
 import {
 	DEFAULT_LEADERBOARD_MAX_SIZE,
+	IGNORED_TEAMS,
 	MATCHES_COUNT_NEEDED_FOR_LEADERBOARD,
 } from "./leaderboards-constants";
 
@@ -91,7 +92,11 @@ export async function teamLeaderboardBySeason({
 		? filterOneEntryPerUser(entries)
 		: entries;
 	const withSharedTeam = resolveSharedTeam(oneEntryPerUser);
-	const withPower = addPowers(withSharedTeam);
+	const withIgnoredHandled = onlyOneEntryPerUser
+		? ignoreTeams({ season, entries: withSharedTeam })
+		: withSharedTeam;
+	const withPower = addPowers(withIgnoredHandled);
+
 	return addPlacementRank(withPower);
 }
 
@@ -121,5 +126,26 @@ function resolveSharedTeam(entries: ReturnType<typeof filterOneEntryPerUser>) {
 			...entry,
 			team: sharedSameTeam ? teams[0] : undefined,
 		};
+	});
+}
+
+function ignoreTeams({
+	season,
+	entries,
+}: { season: number; entries: ReturnType<typeof resolveSharedTeam> }) {
+	const ignoredTeams = IGNORED_TEAMS.get(season);
+
+	if (!ignoredTeams) return entries;
+
+	return entries.filter((entry) => {
+		if (
+			ignoredTeams.some((team) =>
+				team.every((userId) => entry.members.some((m) => m.id === userId)),
+			)
+		) {
+			return false;
+		}
+
+		return true;
 	});
 }
