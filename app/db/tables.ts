@@ -679,6 +679,7 @@ export interface TournamentOrganizationSeries {
 export interface TrustRelationship {
 	trustGiverUserId: number;
 	trustReceiverUserId: number;
+	lastUsedAt: number;
 }
 
 export interface UnvalidatedUserSubmittedImage {
