@@ -180,7 +180,7 @@ export class Tournament {
 							tournamentId: this.ctx.id,
 							name,
 							seeding: checkedInTeams,
-							settings: this.bracketSettings(
+							settings: this.bracketManagerSettings(
 								settings,
 								type,
 								checkedInTeams.length,
@@ -328,7 +328,7 @@ export class Tournament {
 					"round_robin" | "swiss"
 				>,
 				seeding: fillWithNullTillPowerOfTwo(candidateTeams),
-				settings: this.bracketSettings(
+				settings: this.bracketManagerSettings(
 					settings,
 					bracket.type,
 					candidateTeams.length,
@@ -469,7 +469,7 @@ export class Tournament {
 		);
 	}
 
-	bracketSettings(
+	bracketManagerSettings(
 		selectedSettings: TournamentStageSettings | null,
 		type: Tables["TournamentStage"]["type"],
 		participantsCount: number,

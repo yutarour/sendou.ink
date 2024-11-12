@@ -110,7 +110,7 @@ export const action: ActionFunction = async ({ params, request }) => {
 									name: bracket.name,
 									seeding,
 									tournamentId,
-									settings: tournament.bracketSettings(
+									settings: tournament.bracketManagerSettings(
 										bracket.settings,
 										bracket.type,
 										seeding.length,
@@ -125,7 +125,7 @@ export const action: ActionFunction = async ({ params, request }) => {
 									bracket.type === "round_robin"
 										? seeding
 										: fillWithNullTillPowerOfTwo(seeding),
-								settings: tournament.bracketSettings(
+								settings: tournament.bracketManagerSettings(
 									bracket.settings,
 									bracket.type,
 									seeding.length,
