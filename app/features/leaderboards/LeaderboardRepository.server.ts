@@ -87,15 +87,15 @@ export async function teamLeaderboardBySeason({
 	onlyOneEntryPerUser: boolean;
 }) {
 	const entries = await teamLeaderboardBySeasonQuery(season).execute();
+	const withIgnoredHandled = onlyOneEntryPerUser
+		? ignoreTeams({ season, entries })
+		: entries;
 
 	const oneEntryPerUser = onlyOneEntryPerUser
-		? filterOneEntryPerUser(entries)
-		: entries;
+		? filterOneEntryPerUser(withIgnoredHandled)
+		: withIgnoredHandled;
 	const withSharedTeam = resolveSharedTeam(oneEntryPerUser);
-	const withIgnoredHandled = onlyOneEntryPerUser
-		? ignoreTeams({ season, entries: withSharedTeam })
-		: withSharedTeam;
-	const withPower = addPowers(withIgnoredHandled);
+	const withPower = addPowers(withSharedTeam);
 
 	return addPlacementRank(withPower);
 }
@@ -132,7 +132,7 @@ function resolveSharedTeam(entries: ReturnType<typeof filterOneEntryPerUser>) {
 function ignoreTeams({
 	season,
 	entries,
-}: { season: number; entries: ReturnType<typeof resolveSharedTeam> }) {
+}: { season: number; entries: TeamLeaderboardBySeasonQueryReturnType }) {
 	const ignoredTeams = IGNORED_TEAMS.get(season);
 
 	if (!ignoredTeams) return entries;
