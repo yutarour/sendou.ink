@@ -215,17 +215,17 @@ export const homemadeBadges: BadgeInfo[] = [
 		authorDiscordId: "569271521776762896",
 	},
 	{
-		displayName: "Karot's Tourneys (100 KT Power)",
+		displayName: "Reef Reunion (100 KT Power)",
 		fileName: "ktlow",
 		authorDiscordId: "1170249805373657093",
 	},
 	{
-		displayName: "Karot's Tourneys (500 KT Power)",
+		displayName: "Reef Reunion (500 KT Power)",
 		fileName: "ktmed",
 		authorDiscordId: "1170249805373657093",
 	},
 	{
-		displayName: "Karot's Tourneys (999 KT Power)",
+		displayName: "Reef Reunion (999 KT Power)",
 		fileName: "kthigh",
 		authorDiscordId: "1170249805373657093",
 	},
