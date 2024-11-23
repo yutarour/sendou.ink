@@ -81,22 +81,16 @@ export class Tournament {
 		a: TournamentData["ctx"]["teams"][number],
 		b: TournamentData["ctx"]["teams"][number],
 	) {
-		const aPlus = a.members
-			.flatMap((a) => (a.plusTier ? [a.plusTier] : []))
-			.sort((a, b) => a - b)
-			.slice(0, 4);
-		const bPlus = b.members
-			.flatMap((b) => (b.plusTier ? [b.plusTier] : []))
-			.sort((a, b) => a - b)
-			.slice(0, 4);
+		if (a.avgSeedingSkillOrdinal && b.avgSeedingSkillOrdinal) {
+			return b.avgSeedingSkillOrdinal - a.avgSeedingSkillOrdinal;
+		}
 
-		for (let i = 0; i < 4; i++) {
-			if (aPlus[i] && !bPlus[i]) return -1;
-			if (!aPlus[i] && bPlus[i]) return 1;
+		if (a.avgSeedingSkillOrdinal && !b.avgSeedingSkillOrdinal) {
+			return -1;
+		}
 
-			if (aPlus[i] !== bPlus[i]) {
-				return aPlus[i] - bPlus[i];
-			}
+		if (!a.avgSeedingSkillOrdinal && b.avgSeedingSkillOrdinal) {
+			return 1;
 		}
 
 		return a.createdAt - b.createdAt;
@@ -526,6 +520,20 @@ export class Tournament {
 			startTime: this.ctx.startTime,
 			minMembersPerTeam: this.minMembersPerTeam,
 		});
+	}
+
+	/** What seeding skill rating this tournament counts for */
+	get skillCountsFor() {
+		if (this.ranked) {
+			return "RANKED";
+		}
+
+		// exclude gimmicky tournaments
+		if (this.minMembersPerTeam === 4 && !this.ctx.tags?.includes("SPECIAL")) {
+			return "UNRANKED";
+		}
+
+		return null;
 	}
 
 	get minMembersPerTeam() {
