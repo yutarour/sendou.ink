@@ -2,7 +2,7 @@ import type { ActionFunction } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
 import { z } from "zod";
 import { TOURNAMENT_STAGE_TYPES } from "~/db/tables";
-import type { CalendarEventTag } from "~/db/types";
+import type { CalendarEventTag, PersistedCalendarEventTag } from "~/db/types";
 import { requireUser } from "~/features/auth/core/user.server";
 import * as CalendarRepository from "~/features/calendar/CalendarRepository.server";
 import * as ShowcaseTournaments from "~/features/front-page/core/ShowcaseTournaments.server";
@@ -212,6 +212,12 @@ export const bracketProgressionSchema = z.preprocess(
 		),
 );
 
+export const calendarEventTagSchema = z
+	.string()
+	.refine((val) =>
+		CALENDAR_EVENT.PERSISTED_TAGS.includes(val as PersistedCalendarEventTag),
+	);
+
 export const newCalendarEventActionSchema = z
 	.object({
 		eventToEditId: z.preprocess(actualNumber, id.nullish()),
@@ -252,15 +258,7 @@ export const newCalendarEventActionSchema = z
 		),
 		tags: z.preprocess(
 			processMany(safeJSONParse, removeDuplicates),
-			z
-				.array(
-					z
-						.string()
-						.refine((val) =>
-							CALENDAR_EVENT.TAGS.includes(val as CalendarEventTag),
-						),
-				)
-				.nullable(),
+			z.array(calendarEventTagSchema).nullable(),
 		),
 		badges: z.preprocess(
 			processMany(safeJSONParse, removeDuplicates),

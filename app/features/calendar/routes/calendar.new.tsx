@@ -110,15 +110,17 @@ export default function CalendarNewEventPage() {
 					<h1 className="text-lg">
 						{data.isAddingTournament ? "New tournament" : "New calendar event"}
 					</h1>
-					<a
-						href={CREATING_TOURNAMENT_DOC_LINK}
-						className="text-lg text-bold"
-						title="Documentation about creating tournaments"
-						target="_blank"
-						rel="noopener noreferrer"
-					>
-						?
-					</a>
+					{data.isAddingTournament ? (
+						<a
+							href={CREATING_TOURNAMENT_DOC_LINK}
+							className="text-lg text-bold"
+							title="Documentation about creating tournaments"
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							?
+						</a>
+					) : null}
 				</div>
 				{data.isAddingTournament ? <TemplateTournamentForm /> : null}
 				<EventForm key={baseEvent?.eventId} />
@@ -572,9 +574,8 @@ function TagsAdder() {
 	const [tags, setTags] = React.useState(baseEvent?.tags ?? []);
 	const id = React.useId();
 
-	const tagsForSelect = CALENDAR_EVENT.TAGS.filter(
-		// @ts-expect-error TODO: fix this (5.5 version)
-		(tag) => !tags.includes(tag) && tag !== "BADGE",
+	const tagsForSelect = CALENDAR_EVENT.PERSISTED_TAGS.filter(
+		(tag) => !tags.includes(tag),
 	);
 
 	return (

@@ -3,7 +3,7 @@ import { sql } from "kysely";
 import { jsonArrayFrom, jsonObjectFrom } from "kysely/helpers/sqlite";
 import { db } from "~/db/sql";
 import type { DB, Tables, TournamentSettings } from "~/db/tables";
-import type { CalendarEventTag } from "~/db/types";
+import type { CalendarEventTag, PersistedCalendarEventTag } from "~/db/types";
 import { MapPool } from "~/features/map-list-generator/core/map-pool";
 import * as Progression from "~/features/tournament-bracket/core/Progression";
 import { databaseTimestampNow, dateToDatabaseTimestamp } from "~/utils/dates";
@@ -143,11 +143,15 @@ export type FindAllBetweenTwoTimestampsItem = Unwrapped<
 export async function findAllBetweenTwoTimestamps({
 	startTime,
 	endTime,
+	tagsToFilterBy,
+	onlyTournaments,
 }: {
 	startTime: Date;
 	endTime: Date;
+	tagsToFilterBy: Array<PersistedCalendarEventTag>;
+	onlyTournaments: boolean;
 }) {
-	const rows = await db
+	let query = db
 		.selectFrom("CalendarEvent")
 		.innerJoin(
 			"CalendarEventDate",
@@ -211,8 +215,17 @@ export async function findAllBetweenTwoTimestamps({
 			"<=",
 			dateToDatabaseTimestamp(endTime),
 		)
-		.orderBy("CalendarEventDate.startTime", "asc")
-		.execute();
+		.orderBy("CalendarEventDate.startTime", "asc");
+
+	for (const tag of tagsToFilterBy) {
+		query = query.where("CalendarEvent.tags", "like", `%${tag}%`);
+	}
+
+	if (onlyTournaments) {
+		query = query.where("CalendarEvent.tournamentId", "is not", null);
+	}
+
+	const rows = await query.execute();
 
 	return Promise.all(
 		rows
@@ -305,17 +318,30 @@ async function tournamentParticipantCount({
 export async function startTimesOfRange({
 	startTime,
 	endTime,
+	tagsToFilterBy,
+	onlyTournaments,
 }: {
 	startTime: Date;
 	endTime: Date;
+	tagsToFilterBy: Array<PersistedCalendarEventTag>;
+	onlyTournaments: boolean;
 }) {
-	const rows = await db
+	let query = db
 		.selectFrom("CalendarEventDate")
+		.innerJoin("CalendarEvent", "CalendarEvent.id", "CalendarEventDate.eventId")
 		.select(["startTime"])
 		.where("startTime", ">=", dateToDatabaseTimestamp(startTime))
-		.where("startTime", "<=", dateToDatabaseTimestamp(endTime))
-		.execute();
+		.where("startTime", "<=", dateToDatabaseTimestamp(endTime));
 
+	for (const tag of tagsToFilterBy) {
+		query = query.where("CalendarEvent.tags", "like", `%${tag}%`);
+	}
+
+	if (onlyTournaments) {
+		query = query.where("CalendarEvent.tournamentId", "is not", null);
+	}
+
+	const rows = await query.execute();
 	return rows.map((row) => row.startTime);
 }
 
