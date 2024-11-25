@@ -27,6 +27,8 @@ export interface GetUserResponse {
 	socials: {
 		twitch: string | null;
 		twitter: string | null;
+		battlefy: string | null;
+		bsky: string | null;
 	};
 	plusServerTier: 1 | 2 | 3 | null;
 	weaponPool: Array<ProfileWeapon>;
