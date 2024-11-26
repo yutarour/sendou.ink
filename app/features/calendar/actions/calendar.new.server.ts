@@ -324,4 +324,22 @@ export const newCalendarEventActionSchema = z
 		{
 			message: "Tournament must have exactly one date",
 		},
+	)
+	.refine(
+		(schema) => {
+			if (schema.toToolsMode !== "ALL") {
+				return true;
+			}
+
+			const maps = schema.pool ? MapPool.toDbList(schema.pool) : [];
+
+			return (
+				maps.length === 4 &&
+				rankedModesShort.every((mode) => maps.some((map) => map.mode === mode))
+			);
+		},
+		{
+			message:
+				'Map pool must contain a map for each ranked mode if using "Prepicked by teams - All modes"',
+		},
 	);
