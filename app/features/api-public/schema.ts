@@ -142,6 +142,13 @@ export type GetTournamentTeamsResponse = Array<{
 		avatarUrl: string | null;
 		captain: boolean;
 		/**
+		 * Splatoon 3 splashtag name & ID. Notice the value returned is the player's set name at the time of the tournament.
+		 * Only available for tournaments with the "Require IGN's" option enabled.
+		 *
+		 * @example "Sendou#2955"
+		 */
+		inGameName: string | null;
+		/**
 		 * @example "2024-01-12T20:00:00.000Z"
 		 */
 		joinedAt: string;
