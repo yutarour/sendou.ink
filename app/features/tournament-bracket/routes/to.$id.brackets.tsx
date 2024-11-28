@@ -471,8 +471,7 @@ export default function TournamentBracketsPage() {
 							{teamsSourceText()}
 						</div>
 					) : null}
-					{bracket.sources?.every((s) => !s.placements.includes(1)) &&
-					bracket.checkInRequired ? (
+					{bracket.requiresCheckIn ? (
 						<div className="text-center text-sm font-semi-bold text-lighter mt-2 text-warning">
 							Bracket requires check-in{" "}
 							{bracket.startTime ? (

@@ -124,7 +124,7 @@ export class Tournament {
 						name,
 						sources,
 						createdAt: inProgressStage.createdAt,
-						checkInRequired: requiresCheckIn ?? false,
+						requiresCheckIn,
 						startTime: startTime ? databaseTimestampToDate(startTime) : null,
 						settings: settings ?? null,
 						data: {
@@ -167,7 +167,7 @@ export class Tournament {
 						seeding: checkedInTeams,
 						preview: true,
 						name,
-						checkInRequired: requiresCheckIn ?? false,
+						requiresCheckIn,
 						startTime: startTime ? databaseTimestampToDate(startTime) : null,
 						settings: settings ?? null,
 						data: Swiss.create({
@@ -224,7 +224,7 @@ export class Tournament {
 						seeding: checkedInTeamsWithReplaysAvoided,
 						preview: true,
 						name,
-						checkInRequired: requiresCheckIn ?? false,
+						requiresCheckIn,
 						startTime: startTime ? databaseTimestampToDate(startTime) : null,
 						settings: settings ?? null,
 						type,

@@ -32,7 +32,7 @@ interface CreateBracketArgs {
 	}[];
 	seeding?: number[];
 	settings: TournamentStageSettings | null;
-	checkInRequired: boolean;
+	requiresCheckIn: boolean;
 	startTime: Date | null;
 }
 
@@ -66,7 +66,7 @@ export abstract class Bracket {
 	createdAt;
 	seeding;
 	settings;
-	checkInRequired;
+	requiresCheckIn;
 	startTime;
 
 	constructor({
@@ -82,7 +82,7 @@ export abstract class Bracket {
 		createdAt,
 		seeding,
 		settings,
-		checkInRequired,
+		requiresCheckIn,
 		startTime,
 	}: Omit<CreateBracketArgs, "format">) {
 		if (!data && !seeding) {
@@ -101,7 +101,7 @@ export abstract class Bracket {
 		this.teamsPendingCheckIn = teamsPendingCheckIn;
 		this.sources = sources;
 		this.createdAt = createdAt;
-		this.checkInRequired = checkInRequired;
+		this.requiresCheckIn = requiresCheckIn;
 		this.startTime = startTime;
 
 		if (this.tournament.simulateBrackets) {
