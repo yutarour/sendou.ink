@@ -414,6 +414,8 @@ export interface TournamentSettings {
 	thirdPlaceMatch?: boolean;
 	isRanked?: boolean;
 	enableNoScreenToggle?: boolean;
+	/** Enable the subs tab, default true */
+	enableSubs?: boolean;
 	deadlines?: "STRICT" | "DEFAULT";
 	requireInGameNames?: boolean;
 	isInvitational?: boolean;

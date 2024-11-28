@@ -782,7 +782,7 @@ export class Tournament {
 	}
 
 	get subsFeatureEnabled() {
-		return !this.isInvitational;
+		return this.ctx.settings.enableSubs ?? true;
 	}
 
 	get canAddNewSubPost() {

@@ -474,6 +474,7 @@ type CreateArgs = Pick<
 	isInvitational?: boolean;
 	deadlines: TournamentSettings["deadlines"];
 	enableNoScreenToggle?: boolean;
+	enableSubs?: boolean;
 	autonomousSubs?: boolean;
 	regClosesAt?: number;
 	rules: string | null;
@@ -506,6 +507,7 @@ export async function create(args: CreateArgs) {
 				deadlines: args.deadlines,
 				isInvitational: args.isInvitational,
 				enableNoScreenToggle: args.enableNoScreenToggle,
+				enableSubs: args.enableSubs,
 				autonomousSubs: args.autonomousSubs,
 				regClosesAt: args.regClosesAt,
 				requireInGameNames: args.requireInGameNames,
@@ -655,6 +657,7 @@ export async function update(args: UpdateArgs) {
 				deadlines: args.deadlines,
 				isInvitational: args.isInvitational,
 				enableNoScreenToggle: args.enableNoScreenToggle,
+				enableSubs: args.enableSubs,
 				autonomousSubs: args.autonomousSubs,
 				regClosesAt: args.regClosesAt,
 				requireInGameNames: args.requireInGameNames,

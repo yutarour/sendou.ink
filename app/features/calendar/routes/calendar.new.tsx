@@ -239,6 +239,7 @@ function EventForm() {
 					<RegClosesAtSelect />
 					<RankedToggle />
 					<EnableNoScreenToggle />
+					<EnableSubsToggle />
 					<AutonomousSubsToggle />
 					<RequireIGNToggle />
 					<InvitationalToggle
@@ -839,6 +840,33 @@ function EnableNoScreenToggle() {
 			<FormMessage type="info">
 				When registering ask teams if they want to play without Splattercolor
 				Screen.
+			</FormMessage>
+		</div>
+	);
+}
+
+function EnableSubsToggle() {
+	const baseEvent = useBaseEvent();
+	const [enableSubs, setEnableSubs] = React.useState(
+		baseEvent?.tournament?.ctx.settings.enableSubs ?? true,
+	);
+	const id = React.useId();
+
+	return (
+		<div>
+			<label htmlFor={id} className="w-max">
+				Subs tab
+			</label>
+			<Toggle
+				name="enableSubs"
+				id={id}
+				tiny
+				checked={enableSubs}
+				setChecked={setEnableSubs}
+			/>
+			<FormMessage type="info">
+				Allow users to sign up as "subs" in addition to the normal event
+				sign-up.
 			</FormMessage>
 		</div>
 	);
