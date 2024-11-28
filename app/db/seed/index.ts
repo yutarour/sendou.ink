@@ -1085,6 +1085,7 @@ function calendarEventWithToToolsTieBreakerMapPool() {
 	for (const tieBreakerCalendarEventId of [
 		TO_TOOLS_CALENDAR_EVENT_ID, // PICNIC
 		TO_TOOLS_CALENDAR_EVENT_ID + 2, // Paddling Pool
+		TO_TOOLS_CALENDAR_EVENT_ID + 4, // The Depths
 	]) {
 		for (const { mode, stageId } of tiebreakerPicks.stageModePairs) {
 			sql

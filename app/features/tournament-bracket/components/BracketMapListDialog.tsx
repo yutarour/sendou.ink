@@ -740,6 +740,7 @@ function RoundMapList({
 }) {
 	const id = React.useId();
 	const [editing, setEditing] = React.useState(false);
+	const tournament = useTournament();
 
 	return (
 		<div>
@@ -806,12 +807,16 @@ function RoundMapList({
 					}
 
 					const isTeamsPick = !maps.list && i === 0;
+					const isLast = i === maps.count - 1;
 
 					return (
 						<MysteryRow
 							key={i}
 							number={i + 1}
 							isCounterpicks={!isTeamsPick && maps.pickBan === "COUNTERPICK"}
+							isTiebreaker={
+								tournament.ctx.mapPickingStyle === "AUTO_ALL" && isLast
+							}
 						/>
 					);
 				})}
@@ -888,9 +893,11 @@ function MapListRow({
 function MysteryRow({
 	number,
 	isCounterpicks,
+	isTiebreaker,
 }: {
 	number: number;
 	isCounterpicks: boolean;
+	isTiebreaker: boolean;
 }) {
 	return (
 		<li className="map-list-dialog__map-list-row">
@@ -900,7 +907,13 @@ function MysteryRow({
 				})}
 			>
 				<span className="text-lg">{number}.</span>
-				{isCounterpicks ? <>Counterpick</> : <>Team&apos;s pick</>}
+				{isCounterpicks ? (
+					<>Counterpick</>
+				) : isTiebreaker ? (
+					<>Tiebreaker</>
+				) : (
+					<>Team&apos;s pick</>
+				)}
 			</div>
 		</li>
 	);
