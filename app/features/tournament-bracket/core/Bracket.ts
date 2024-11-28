@@ -46,7 +46,10 @@ export interface Standing {
 		mapWins: number;
 		mapLosses: number;
 		points: number;
+		// first tiebreaker in round robin
 		winsAgainstTied: number;
+		// first tiebreaker in swiss
+		lossesAgainstTied?: number;
 		buchholzSets?: number;
 		buchholzMaps?: number;
 	};
@@ -1219,6 +1222,7 @@ class SwissBracket extends Bracket {
 				mapWins: number;
 				mapLosses: number;
 				winsAgainstTied: number;
+				lossesAgainstTied: number;
 				buchholzSets: number;
 				buchholzMaps: number;
 			}[] = [];
@@ -1256,6 +1260,7 @@ class SwissBracket extends Bracket {
 						mapWins,
 						mapLosses,
 						winsAgainstTied: 0,
+						lossesAgainstTied: 0,
 						buchholzMaps,
 						buchholzSets,
 					});
@@ -1387,18 +1392,29 @@ class SwissBracket extends Bracket {
 
 					// they are different teams and are tied, let's check who won
 
-					const wonTheirMatch = matches.some(
+					const finishedMatchBetweenTeams = matches.find(
 						(match) =>
 							(match.opponent1?.id === team.id &&
-								match.opponent2?.id === team2.id &&
-								match.opponent1?.result === "win") ||
+								match.opponent2?.id === team2.id) ||
 							(match.opponent1?.id === team2.id &&
 								match.opponent2?.id === team.id &&
-								match.opponent2?.result === "win"),
+								(match.opponent1?.result === "win" ||
+									match.opponent2?.result === "win")),
 					);
+
+					// they did not play each other
+					if (!finishedMatchBetweenTeams) continue;
+
+					const wonTheirMatch =
+						(finishedMatchBetweenTeams.opponent1!.id === team.id &&
+							finishedMatchBetweenTeams.opponent1!.result === "win") ||
+						(finishedMatchBetweenTeams.opponent2!.id === team.id &&
+							finishedMatchBetweenTeams.opponent2!.result === "win");
 
 					if (wonTheirMatch) {
 						team.winsAgainstTied++;
+					} else {
+						team.lossesAgainstTied++;
 					}
 				}
 			}
@@ -1418,8 +1434,8 @@ class SwissBracket extends Bracket {
 						if (a.setWins > b.setWins) return -1;
 						if (a.setWins < b.setWins) return 1;
 
-						if (a.winsAgainstTied > b.winsAgainstTied) return -1;
-						if (a.winsAgainstTied < b.winsAgainstTied) return 1;
+						if (a.lossesAgainstTied > b.lossesAgainstTied) return 1;
+						if (a.lossesAgainstTied < b.lossesAgainstTied) return -1;
 
 						if (a.mapWins > b.mapWins) return -1;
 						if (a.mapWins < b.mapWins) return 1;
@@ -1449,6 +1465,7 @@ class SwissBracket extends Bracket {
 								mapWins: team.mapWins,
 								mapLosses: team.mapLosses,
 								winsAgainstTied: team.winsAgainstTied,
+								lossesAgainstTied: team.lossesAgainstTied,
 								buchholzSets: team.buchholzSets,
 								buchholzMaps: team.buchholzMaps,
 								points: 0,

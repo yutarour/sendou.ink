@@ -194,6 +194,7 @@ export interface GetTournamentBracketStandingsResponse {
 			mapLosses: number;
 			points: number;
 			winsAgainstTied: number;
+			lossesAgainstTied?: number;
 			buchholzSets?: number;
 			buchholzMaps?: number;
 		};
