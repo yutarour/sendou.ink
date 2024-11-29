@@ -147,6 +147,17 @@ function Document({
 	return (
 		<html lang={locale} dir={i18n.dir()} className={htmlThemeClass}>
 			<head>
+				<script
+					// biome-ignore lint/security/noDangerouslySetInnerHtml: needed for Ramp.tsx
+					dangerouslySetInnerHTML={{
+						__html: `
+              window.ramp = window.ramp || {};
+              window.ramp.que = window.ramp.que || [];
+              window.ramp.passiveMode = true;
+							window._pwRampComponentLoaded = window._pwRampComponentLoaded || false;
+         `,
+					}}
+				/>
 				<meta charSet="utf-8" />
 				<meta
 					name="viewport"
