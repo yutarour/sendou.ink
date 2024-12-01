@@ -165,12 +165,12 @@ export const homemadeBadges: BadgeInfo[] = [
 		authorDiscordId: "528851510222782474",
 	},
 	{
-		displayName: "DAYTONA Speedweeks '25",
+		displayName: "Just Daytona 1-5",
 		fileName: "daytonaspeedweeks1st",
 		authorDiscordId: "528851510222782474",
 	},
 	{
-		displayName: "DAYTONA Speedweeks '25 (2nd place)",
+		displayName: "Just Daytona 2nd 1-5",
 		fileName: "daytonaspeedweeks2nd",
 		authorDiscordId: "528851510222782474",
 	},
@@ -372,6 +372,11 @@ export const homemadeBadges: BadgeInfo[] = [
 	{
 		displayName: "Buried Treasure",
 		fileName: "treasure",
+		authorDiscordId: "528851510222782474",
+	},
+	{
+		displayName: "Anarchy NoVA",
+		fileName: "punkshrimp",
 		authorDiscordId: "528851510222782474",
 	},
 ];
