@@ -49,6 +49,7 @@ const TRANSLATORS: Array<{
 		translators: [
 			{ name: "NoAim™bUrn", twitter: "noaim_brn" },
 			{ name: "Alice", twitter: "Aloschus" },
+			"jgiefer",
 		],
 		language: "de",
 	},
