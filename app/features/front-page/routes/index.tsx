@@ -272,15 +272,14 @@ function TournamentCard({
 	const time = () => {
 		if (!isMounted) return "Placeholder";
 
-		return databaseTimestampToDate(tournament.startTime).toLocaleString(
-			i18n.language,
-			{
-				month: "short",
-				day: "numeric",
-				hour: "numeric",
-				weekday: "short",
-			},
-		);
+		const date = databaseTimestampToDate(tournament.startTime);
+		return date.toLocaleString(i18n.language, {
+			month: "short",
+			day: "numeric",
+			hour: "numeric",
+			weekday: "short",
+			minute: date.getMinutes() !== 0 ? "numeric" : undefined,
+		});
 	};
 
 	return (
