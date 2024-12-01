@@ -23,7 +23,7 @@ describe("team creation", () => {
 	});
 
 	it("prevents creating a team whose name is only special characters", async () => {
-		expect(action({ name: "𝓢𝓲𝓵" }, { user: "regular" })).rejects.toThrow(
+		await expect(action({ name: "𝓢𝓲𝓵" }, { user: "regular" })).rejects.toThrow(
 			"status code: 400",
 		);
 	});

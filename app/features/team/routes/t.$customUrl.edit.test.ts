@@ -42,7 +42,7 @@ describe("team creation", () => {
 	it("prevents editing team name to only special characters", async () => {
 		await createTeamAction({ name: "Team 1" }, { user: "regular" });
 
-		expect(
+		await expect(
 			editTeamAction(
 				{
 					_action: "EDIT",

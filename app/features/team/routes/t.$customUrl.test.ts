@@ -159,7 +159,7 @@ describe("Secondary teams", () => {
 		await createTeamAction({ name: "Team 1" }, { user: "regular" });
 		await createTeamAction({ name: "Team 2" }, { user: "regular" });
 
-		expect(
+		await expect(
 			createTeamAction({ name: "Team 3" }, { user: "regular" }),
 		).rejects.toThrow("status code: 400");
 	});
