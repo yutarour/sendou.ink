@@ -38,7 +38,7 @@ export function NavDialog({
 						to={`/${item.url}`}
 						className="layout__overlay-nav__nav-item"
 						key={item.name}
-						prefetch={item.prefetch ? "render" : undefined}
+						prefetch={item.prefetch ? "intent" : undefined}
 						onClick={close}
 					>
 						<div className="layout__overlay-nav__nav-image-container">

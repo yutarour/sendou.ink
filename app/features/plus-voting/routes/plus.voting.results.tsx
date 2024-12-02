@@ -1,8 +1,4 @@
-import type {
-	LoaderFunctionArgs,
-	MetaFunction,
-	SerializeFrom,
-} from "@remix-run/node";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import clsx from "clsx";
 import type { UserWithPlusTier } from "~/db/types";
@@ -14,6 +10,7 @@ import { roundToNDecimalPlaces } from "~/utils/number";
 import { makeTitle } from "~/utils/strings";
 import { PLUS_SERVER_DISCORD_URL, userPage } from "~/utils/urls";
 import { isAtLeastFiveDollarTierPatreon } from "~/utils/users";
+import type { SerializeFrom } from "../../../utils/remix";
 
 import "~/styles/plus-history.css";
 

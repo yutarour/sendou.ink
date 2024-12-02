@@ -1,8 +1,4 @@
-import type {
-	LoaderFunctionArgs,
-	MetaFunction,
-	SerializeFrom,
-} from "@remix-run/node";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import clsx from "clsx";
 import * as React from "react";
@@ -30,6 +26,7 @@ import {
 	stageImageUrl,
 	vodVideoPage,
 } from "~/utils/urls";
+import type { SerializeFrom } from "../../../utils/remix";
 import { PovUser } from "../components/VodPov";
 import { findVodById } from "../queries/findVodById.server";
 import type { Vod } from "../vods-types";

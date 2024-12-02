@@ -2,7 +2,6 @@ import type {
 	ActionFunction,
 	LoaderFunctionArgs,
 	MetaFunction,
-	SerializeFrom,
 } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
 import { Form, Link, useLoaderData } from "@remix-run/react";
@@ -34,6 +33,7 @@ import {
 	teamPage,
 	uploadImagePage,
 } from "~/utils/urls";
+import type { SerializeFrom } from "../../../utils/remix";
 import * as TeamRepository from "../TeamRepository.server";
 import { TEAM } from "../team-constants";
 import { editTeamSchema, teamParamsSchema } from "../team-schemas.server";

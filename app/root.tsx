@@ -1,9 +1,5 @@
-import type {
-	LoaderFunctionArgs,
-	MetaFunction,
-	SerializeFrom,
-} from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import { data, redirect } from "@remix-run/node";
 import {
 	Links,
 	Meta,
@@ -37,9 +33,11 @@ import {
 } from "./features/theme/core/provider";
 import { getThemeSession } from "./features/theme/core/session.server";
 import { useIsMounted } from "./hooks/useIsMounted";
+import { useVisibilityChange } from "./hooks/useVisibilityChange";
 import { DEFAULT_LANGUAGE } from "./modules/i18n/config";
 import i18next, { i18nCookie } from "./modules/i18n/i18next.server";
 import type { Namespace } from "./modules/i18n/resources.server";
+import { type SerializeFrom, isRevalidation } from "./utils/remix";
 import { COMMON_PREVIEW_IMAGE, SUSPENDED_PAGE } from "./utils/urls";
 
 import "nprogress/nprogress.css";
@@ -49,8 +47,6 @@ import "~/styles/layout.css";
 import "~/styles/reset.css";
 import "~/styles/utils.css";
 import "~/styles/vars.css";
-import { useVisibilityChange } from "./hooks/useVisibilityChange";
-import { isRevalidation } from "./utils/remix";
 
 export const shouldRevalidate: ShouldRevalidateFunction = (args) => {
 	if (isRevalidation(args)) return true;
@@ -92,7 +88,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 		return redirect(SUSPENDED_PAGE);
 	}
 
-	return json(
+	return data(
 		{
 			locale,
 			theme: themeSession.getTheme(),
@@ -281,7 +277,7 @@ export default function App() {
 	// useLoaderData can't be used in CatchBoundary and layout is rendered in it as well
 	//
 	// Update 14.10.23: not sure if this still applies as the CatchBoundary is gone
-	const data = useLoaderData<RootLoaderData>();
+	const data = useLoaderData<typeof loader>();
 
 	return (
 		<ThemeProvider

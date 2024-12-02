@@ -1,4 +1,4 @@
-import type { MetaFunction, SerializeFrom } from "@remix-run/node";
+import type { MetaFunction } from "@remix-run/node";
 import { Link, useFetcher, useLoaderData } from "@remix-run/react";
 import clsx from "clsx";
 import React from "react";
@@ -31,6 +31,7 @@ import {
 	userPage,
 	userSubmittedImage,
 } from "~/utils/urls";
+import type { SerializeFrom } from "../../../utils/remix";
 import type * as TeamRepository from "../TeamRepository.server";
 import { isTeamMember, isTeamOwner } from "../team-utils";
 

@@ -25,5 +25,5 @@ export const action: ActionFunction = async ({ request }) => {
 
 	await seed(variation);
 
-	return null;
+	return Response.json(null);
 };
