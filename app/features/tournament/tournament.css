@@ -267,8 +267,12 @@
 }
 
 .tournament__info__description > :is(h1, h2, h3, h4, h5, h6) {
-	margin-block-end: var(--s-5);
+	margin-block-end: var(--s-6);
 	line-height: 1.4;
+}
+
+.tournament__info__description > :is(h2, h3, h4, h5, h6) {
+	margin-block-start: var(--s-6);
 }
 
 .tournament__info__description > h1 {
@@ -277,6 +281,10 @@
 
 .tournament__info__description > :is(h2, h3, h4, h5, h6) {
 	font-size: var(--fonts-lg);
+}
+
+.tournament__info__description > :is(h3, h4, h5, h6) {
+	font-size: var(--fonts-md);
 }
 
 .tournament__info__description > ul:has(+ p) {
