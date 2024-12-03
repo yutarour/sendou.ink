@@ -62,7 +62,11 @@ export class Tournament {
 				return 1;
 			}
 
-			return this.compareUnseededTeams(a, b);
+			return this.compareUnseededTeams(
+				a,
+				b,
+				ctx.settings.minMembersPerTeam ?? 4,
+			);
 		});
 		this.simulateBrackets = simulateBrackets;
 		this.ctx = {
@@ -80,7 +84,19 @@ export class Tournament {
 	private compareUnseededTeams(
 		a: TournamentData["ctx"]["teams"][number],
 		b: TournamentData["ctx"]["teams"][number],
+		minMembersPerTeam: number,
 	) {
+		const aIsFull = a.members.length >= minMembersPerTeam;
+		const bIsFull = b.members.length >= minMembersPerTeam;
+
+		if (aIsFull && !bIsFull) {
+			return -1;
+		}
+
+		if (!aIsFull && bIsFull) {
+			return 1;
+		}
+
 		if (a.avgSeedingSkillOrdinal && b.avgSeedingSkillOrdinal) {
 			return b.avgSeedingSkillOrdinal - a.avgSeedingSkillOrdinal;
 		}
