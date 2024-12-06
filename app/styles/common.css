@@ -1315,7 +1315,7 @@ dialog::backdrop {
 }
 
 .top-leaderboard {
-	min-height: 110px;
+	min-height: 140px;
 	margin-block-start: var(--leaderboard-top-spacing);
 }
 
