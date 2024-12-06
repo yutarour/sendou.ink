@@ -1316,7 +1316,6 @@ dialog::backdrop {
 
 .top-leaderboard {
 	min-height: 140px;
-	margin-block-start: var(--leaderboard-top-spacing);
 }
 
 .youtube__container {
