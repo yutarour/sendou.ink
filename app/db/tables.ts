@@ -688,6 +688,13 @@ export interface TournamentOrganizationSeries {
 	showLeaderboard: Generated<number>;
 }
 
+export interface TournamentBracketProgressionOverride {
+	sourceBracketIdx: number;
+	destinationBracketIdx: number;
+	tournamentTeamId: number;
+	tournamentId: number;
+}
+
 export interface TrustRelationship {
 	trustGiverUserId: number;
 	trustReceiverUserId: number;
@@ -923,6 +930,7 @@ export interface DB {
 	TournamentOrganizationMember: TournamentOrganizationMember;
 	TournamentOrganizationBadge: TournamentOrganizationBadge;
 	TournamentOrganizationSeries: TournamentOrganizationSeries;
+	TournamentBracketProgressionOverride: TournamentBracketProgressionOverride;
 	TrustRelationship: TrustRelationship;
 	UnvalidatedUserSubmittedImage: UnvalidatedUserSubmittedImage;
 	UnvalidatedVideo: UnvalidatedVideo;
