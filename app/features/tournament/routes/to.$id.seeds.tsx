@@ -412,6 +412,7 @@ function SeedAlert({ teamOrder }: { teamOrder: number[] }) {
 		<fetcher.Form method="post" className="tournament__seeds__form">
 			<input type="hidden" name="tournamentId" value={tournament.ctx.id} />
 			<input type="hidden" name="seeds" value={JSON.stringify(teamOrder)} />
+			<input type="hidden" name="_action" value="UPDATE_SEEDS" />
 			<Alert
 				variation={
 					teamOrderChanged ? "WARNING" : showSuccess ? "SUCCESS" : "INFO"
