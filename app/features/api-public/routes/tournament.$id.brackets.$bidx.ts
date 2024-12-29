@@ -33,15 +33,18 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 		meta: {
 			teamsPerGroup:
 				bracket.type === "round_robin"
-					? tournament.ctx.settings.teamsPerGroup
+					? (bracket.settings?.teamsPerGroup ??
+						tournament.ctx.settings.teamsPerGroup)
 					: undefined,
 			groupCount:
 				bracket.type === "swiss"
-					? tournament.ctx.settings.swiss?.groupCount
+					? (bracket.settings?.groupCount ??
+						tournament.ctx.settings.swiss?.groupCount)
 					: undefined,
 			roundCount:
 				bracket.type === "swiss"
-					? tournament.ctx.settings.swiss?.roundCount
+					? (bracket.settings?.roundCount ??
+						tournament.ctx.settings.swiss?.roundCount)
 					: undefined,
 		},
 	};
