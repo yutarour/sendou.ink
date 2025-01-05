@@ -14,6 +14,7 @@ import { modesShort, rankedModesShort } from "~/modules/in-game-lists/modes";
 import { isAdmin } from "~/permissions";
 import { removeDuplicates } from "~/utils/arrays";
 import {
+	databaseTimestampNow,
 	databaseTimestampToDate,
 	dateToDatabaseTimestamp,
 } from "~/utils/dates";
@@ -198,6 +199,7 @@ export class Tournament {
 						sources,
 						createdAt: null,
 						canBeStarted:
+							(!startTime || startTime < databaseTimestampNow()) &&
 							checkedInTeams.length >= TOURNAMENT.ENOUGH_TEAMS_TO_START &&
 							(sources ? relevantMatchesFinished : this.regularCheckInHasEnded),
 						teamsPendingCheckIn:
@@ -242,6 +244,7 @@ export class Tournament {
 						sources,
 						createdAt: null,
 						canBeStarted:
+							(!startTime || startTime < databaseTimestampNow()) &&
 							checkedInTeamsWithReplaysAvoided.length >=
 								TOURNAMENT.ENOUGH_TEAMS_TO_START &&
 							(sources ? relevantMatchesFinished : this.regularCheckInHasEnded),

@@ -471,6 +471,8 @@ export default function TournamentBracketsPage() {
 								⚠️{" "}
 								{bracketIdx === 0 ? (
 									<>Tournament start time is in the future</>
+								) : bracket.startTime && bracket.startTime > new Date() ? (
+									<>Bracket start time is in the future</>
 								) : (
 									<>Teams pending from the previous bracket</>
 								)}{" "}
