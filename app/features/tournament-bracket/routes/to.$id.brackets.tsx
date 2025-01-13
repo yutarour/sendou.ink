@@ -430,6 +430,10 @@ export default function TournamentBracketsPage() {
 		).length;
 	};
 
+	if (tournament.isLeagueSignup) {
+		return null;
+	}
+
 	return (
 		<div>
 			{visibility !== "hidden" && !tournament.everyBracketOver ? (

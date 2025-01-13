@@ -6,6 +6,7 @@ import type {
 import { TOURNAMENT } from "~/features/tournament";
 import type * as Progression from "~/features/tournament-bracket/core/Progression";
 import * as Standings from "~/features/tournament/core/Standings";
+import { LEAGUES } from "~/features/tournament/tournament-constants";
 import { tournamentIsRanked } from "~/features/tournament/tournament-utils";
 import type { TournamentManagerDataSet } from "~/modules/brackets-manager/types";
 import type { Match, Stage } from "~/modules/brackets-model";
@@ -588,7 +589,9 @@ export class Tournament {
 
 				return {
 					groupCount: Math.ceil(participantsCount / teamsPerGroup),
-					seedOrdering: ["groups.seed_optimized"],
+					seedOrdering: [
+						this.isLeagueDivision ? "natural" : "groups.seed_optimized",
+					],
 				};
 			}
 			case "swiss": {
@@ -901,6 +904,16 @@ export class Tournament {
 
 	get autonomousSubs() {
 		return this.ctx.settings.autonomousSubs ?? true;
+	}
+
+	get isLeagueSignup() {
+		return Object.values(LEAGUES)
+			.flat()
+			.some((entry) => entry.tournamentId === this.ctx.id);
+	}
+
+	get isLeagueDivision() {
+		return Boolean(this.ctx.parentTournamentId);
 	}
 
 	matchNameById(matchId: number) {
