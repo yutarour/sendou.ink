@@ -1,4 +1,4 @@
-import type { MetaFunction } from "@remix-run/node";
+import type { MetaFunction, SerializeFrom } from "@remix-run/node";
 import { Form, useFetcher, useLoaderData } from "@remix-run/react";
 import clsx from "clsx";
 import Compressor from "compressorjs";
@@ -37,7 +37,6 @@ import invariant from "~/utils/invariant";
 import type { SendouRouteHandle } from "~/utils/remix.server";
 import { pathnameFromPotentialURL } from "~/utils/strings";
 import { CREATING_TOURNAMENT_DOC_LINK, userSubmittedImage } from "~/utils/urls";
-import type { SerializeFrom } from "../../../utils/remix";
 import {
 	CALENDAR_EVENT,
 	REG_CLOSES_AT_OPTIONS,
@@ -97,8 +96,8 @@ export default function CalendarNewEventPage() {
 		return (
 			<Main className="stack items-center">
 				<Alert variation="WARNING">
-					No permissions to add tournaments. Access to tournaments beta can be
-					applied from Discord helpdesk for established TO&apos;s.
+					No permissions to add tournaments. Tournaments are in beta, accessible
+					by Patreon supporters and established TO&apos;s.
 				</Alert>
 			</Main>
 		);
@@ -182,6 +181,12 @@ function EventForm() {
 		React.useState(false);
 
 	const handleSubmit = () => {
+		const isValid = ref.current?.checkValidity();
+		if (!isValid) {
+			ref.current?.reportValidity();
+			return;
+		}
+
 		const formData = new FormData(ref.current!);
 
 		// if "avatarImgId" it means they want to reuse an existing avatar

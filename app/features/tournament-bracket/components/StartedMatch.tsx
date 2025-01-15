@@ -1,3 +1,4 @@
+import type { SerializeFrom } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
 import clsx from "clsx";
 import type { TFunction } from "i18next";
@@ -13,6 +14,7 @@ import { PickIcon } from "~/components/icons/Pick";
 import { useUser } from "~/features/auth/core/user";
 import { Chat, useChat } from "~/features/chat/components/Chat";
 import { useTournament } from "~/features/tournament/routes/to.$id";
+import { resolveLeagueRoundStartDate } from "~/features/tournament/tournament-utils";
 import { useIsMounted } from "~/hooks/useIsMounted";
 import { useSearchParamState } from "~/hooks/useSearchParamState";
 import type { StageId } from "~/modules/in-game-lists";
@@ -26,7 +28,6 @@ import {
 	specialWeaponImageUrl,
 	stageImageUrl,
 } from "~/utils/urls";
-import type { SerializeFrom } from "../../../utils/remix";
 import type { Bracket } from "../core/Bracket";
 import * as PickBan from "../core/PickBan";
 import type { TournamentDataTeam } from "../core/Tournament.server";
@@ -311,6 +312,14 @@ function FancyStageBanner({
 		return null;
 	})();
 
+	const waitingForLeagueRoundToStart = (() => {
+		const date = resolveLeagueRoundStartDate(tournament, data.match.roundId);
+
+		if (!date) return false;
+
+		return date > new Date();
+	})();
+
 	return (
 		<>
 			{inBanPhase ? (
@@ -335,6 +344,22 @@ function FancyStageBanner({
 							Match locked to be casted
 						</div>
 						<div>Please wait for staff to unlock</div>
+					</div>
+				</div>
+			) : waitingForLeagueRoundToStart ? (
+				<div className="tournament-bracket__locked-banner">
+					<div className="stack sm items-center">
+						<div className="text-lg text-center font-bold">
+							Waiting for league round to start
+						</div>
+						<div>
+							Round playable from{" "}
+							{resolveLeagueRoundStartDate(
+								tournament,
+								data.match.roundId,
+							)!.toLocaleDateString()}{" "}
+							onwards
+						</div>
 					</div>
 				</div>
 			) : waitingForActiveRosterSelectionFor ? (
@@ -630,7 +655,9 @@ function StartedMatchTabs({
 				teams[1],
 				tournament.minMembersPerTeam,
 			),
-			result?.participantIds,
+			result?.participants
+				.map((p) => `${p.userId}-${p.tournamentTeamId}`)
+				.join(","),
 			result?.opponentOnePoints,
 			result?.opponentTwoPoints,
 		].join("-");

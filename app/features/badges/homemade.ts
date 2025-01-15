@@ -15,6 +15,36 @@ export const homemadeBadges: BadgeInfo[] = [
 	// 	authorDiscordId: "123456789012345678",
 	// },
 	{
+		displayName: "Squids For Palestinian Kids",
+		fileName: "three_course_pal",
+		authorDiscordId: "338806780446638082",
+	},
+	{
+		displayName: "BrushMommy's Birthday Bash",
+		fileName: "goldenbrush",
+		authorDiscordId: "338806780446638082",
+	},
+	{
+		displayName: "Academy Showcase",
+		fileName: "academy_showcase",
+		authorDiscordId: "643355948265766912",
+	},
+	{
+		displayName: "Gun (Winning 50 Calibur League)",
+		fileName: "50-cal-fir",
+		authorDiscordId: "530093822806458368",
+	},
+	{
+		displayName: "Gold Bullet (Qualifying for 50 Calibur League)",
+		fileName: "50-cal-sec",
+		authorDiscordId: "530093822806458368",
+	},
+	{
+		displayName: "Silver Bullet (Winning Silver Bracket 50 Calibur)",
+		fileName: "50-cal-thi",
+		authorDiscordId: "530093822806458368",
+	},
+	{
 		displayName: "Turf War Takedown",
 		fileName: "turf1230",
 		authorDiscordId: "1170249805373657093",
@@ -378,5 +408,90 @@ export const homemadeBadges: BadgeInfo[] = [
 		displayName: "Anarchy NoVA",
 		fileName: "punkshrimp",
 		authorDiscordId: "528851510222782474",
+	},
+	{
+		displayName: "Sunday Run",
+		fileName: "sunday-run",
+		authorDiscordId: "570323825669963972",
+	},
+	{
+		displayName: "Specials To The Power Of Four!",
+		fileName: "special4",
+		authorDiscordId: "1170249805373657093",
+	},
+	{
+		displayName: "Badge Palooza",
+		fileName: "badgepalooza",
+		authorDiscordId: "528851510222782474",
+	},
+	{
+		displayName: "SpaceDog Showdown",
+		fileName: "spacedog",
+		authorDiscordId: "528851510222782474",
+	},
+	{
+		displayName: "SpaceDog Showdown (Jolly Edition)",
+		fileName: "spacedogjolly",
+		authorDiscordId: "528851510222782474",
+	},
+	{
+		displayName: "Mimikyu Monday",
+		fileName: "mimikyu",
+		authorDiscordId: "528851510222782474",
+	},
+	{
+		displayName: "Zones Royale",
+		fileName: "szroyale",
+		authorDiscordId: "528851510222782474",
+	},
+	{
+		displayName: "Bastard München",
+		fileName: "muchen",
+		authorDiscordId: "528851510222782474",
+	},
+	{
+		displayName: "Eggs and Salad",
+		fileName: "saladbowl",
+		authorDiscordId: "336683473714544641",
+	},
+	{
+		displayName: "Splashdown Saturday",
+		fileName: "splashdownsat",
+		authorDiscordId: "631246535560265749",
+	},
+	{
+		displayName: "Low Tier Bouts",
+		fileName: "low-tier-bouts",
+		authorDiscordId: "430487372015206410",
+	},
+	{
+		displayName: "Level Up",
+		fileName: "magikarp",
+		authorDiscordId: "528851510222782474",
+	},
+	{
+		displayName: "Level Up: Shiny Hunt",
+		fileName: "shinymagikarp",
+		authorDiscordId: "528851510222782474",
+	},
+	{
+		displayName: "FC Barcha",
+		fileName: "barcha",
+		authorDiscordId: "528851510222782474",
+	},
+	{
+		displayName: "Manshine City",
+		fileName: "manshine",
+		authorDiscordId: "528851510222782474",
+	},
+	{
+		displayName: "Reef-Lux Achievement",
+		fileName: "flux",
+		authorDiscordId: "631246535560265749",
+	},
+	{
+		displayName: "Meet Your Match",
+		fileName: "matchmeet",
+		authorDiscordId: "631246535560265749",
 	},
 ];

@@ -129,6 +129,7 @@ export interface CalendarEvent {
 	name: string;
 	participantCount: number | null;
 	tags: string | null;
+	hidden: Generated<number>;
 	tournamentId: number | null;
 	organizationId: number | null;
 	avatarImgId: number | null;
@@ -455,6 +456,8 @@ export interface Tournament {
 		string | null
 	>;
 	rules: string | null;
+	/** Related "parent tournament", the tournament that contains the original sign-ups (for leagues) */
+	parentTournamentId: number | null;
 }
 
 export interface PreparedMaps {
@@ -530,6 +533,8 @@ export interface TournamentMatchGameResult {
 export interface TournamentMatchGameResultParticipant {
 	matchGameResultId: number;
 	userId: number;
+	// it only started mattering when we added the possibility to join many teams in a tournament, null for legacy events
+	tournamentTeamId: number | null;
 }
 
 export interface TournamentResult {
@@ -620,6 +625,8 @@ export interface TournamentTeam {
 	noScreen: Generated<number>;
 	droppedOut: Generated<number>;
 	seed: number | null;
+	/** For formats that have many starting brackets, where should the team start? */
+	startingBracketIdx: number | null;
 	activeRosterUserIds: ColumnType<
 		number[] | null,
 		string | null,
@@ -684,6 +691,13 @@ export interface TournamentOrganizationSeries {
 	description: string | null;
 	substringMatches: ColumnType<string[], string, string>;
 	showLeaderboard: Generated<number>;
+}
+
+export interface TournamentBracketProgressionOverride {
+	sourceBracketIdx: number;
+	destinationBracketIdx: number;
+	tournamentTeamId: number;
+	tournamentId: number;
 }
 
 export interface TrustRelationship {
@@ -921,6 +935,7 @@ export interface DB {
 	TournamentOrganizationMember: TournamentOrganizationMember;
 	TournamentOrganizationBadge: TournamentOrganizationBadge;
 	TournamentOrganizationSeries: TournamentOrganizationSeries;
+	TournamentBracketProgressionOverride: TournamentBracketProgressionOverride;
 	TrustRelationship: TrustRelationship;
 	UnvalidatedUserSubmittedImage: UnvalidatedUserSubmittedImage;
 	UnvalidatedVideo: UnvalidatedVideo;

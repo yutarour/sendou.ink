@@ -46,6 +46,7 @@ export async function findById(id: number) {
 			"Tournament.castedMatchesInfo",
 			"Tournament.mapPickingStyle",
 			"Tournament.rules",
+			"Tournament.parentTournamentId",
 			"CalendarEvent.name",
 			"CalendarEvent.description",
 			"CalendarEventDate.startTime",
@@ -134,6 +135,20 @@ export async function findById(id: number) {
 					.where("TournamentSub.tournamentId", "=", id)
 					.groupBy("TournamentSub.visibility"),
 			).as("subCounts"),
+			jsonArrayFrom(
+				eb
+					.selectFrom("TournamentBracketProgressionOverride")
+					.select([
+						"TournamentBracketProgressionOverride.sourceBracketIdx",
+						"TournamentBracketProgressionOverride.destinationBracketIdx",
+						"TournamentBracketProgressionOverride.tournamentTeamId",
+					])
+					.whereRef(
+						"TournamentBracketProgressionOverride.tournamentId",
+						"=",
+						"Tournament.id",
+					),
+			).as("bracketProgressionOverrides"),
 			exists(
 				selectFrom("TournamentResult")
 					.where("TournamentResult.tournamentId", "=", id)
@@ -157,6 +172,7 @@ export async function findById(id: number) {
 						"TournamentTeam.inviteCode",
 						"TournamentTeam.createdAt",
 						"TournamentTeam.activeRosterUserIds",
+						"TournamentTeam.startingBracketIdx",
 						"UserSubmittedImage.url as pickupAvatarUrl",
 						jsonArrayFrom(
 							innerEb
@@ -304,6 +320,40 @@ export async function findById(id: number) {
 function nullifyingAvg(values: number[]) {
 	if (values.length === 0) return null;
 	return values.reduce((acc, cur) => acc + cur, 0) / values.length;
+}
+
+export async function findChildTournaments(parentTournamentId: number) {
+	const rows = await db
+		.selectFrom("Tournament")
+		.innerJoin("CalendarEvent", "Tournament.id", "CalendarEvent.tournamentId")
+		.select((eb) => [
+			"Tournament.id as tournamentId",
+			"CalendarEvent.name",
+			eb
+				.selectFrom("TournamentTeam")
+				.select(({ fn }) => [fn.countAll<number>().as("teamsCount")])
+				.whereRef("TournamentTeam.tournamentId", "=", "Tournament.id")
+				.as("teamsCount"),
+			jsonArrayFrom(
+				eb
+					.selectFrom("TournamentTeam")
+					.innerJoin(
+						"TournamentTeamMember",
+						"TournamentTeamMember.tournamentTeamId",
+						"TournamentTeam.id",
+					)
+					.select(["TournamentTeamMember.userId"])
+					.whereRef("TournamentTeam.tournamentId", "=", "Tournament.id"),
+			).as("teamMembers"),
+		])
+		.where("Tournament.parentTournamentId", "=", parentTournamentId)
+		.$narrowType<{ teamsCount: NotNull }>()
+		.execute();
+
+	return rows.map((row) => ({
+		...row,
+		participantUserIds: new Set(row.teamMembers.map((member) => member.userId)),
+	}));
 }
 
 export async function findTOSetMapPoolById(tournamentId: number) {
@@ -672,6 +722,14 @@ export function updateProgression({
 					allTournamentTeamsOfTournament,
 				)
 				.execute();
+
+			await trx
+				.updateTable("TournamentTeam")
+				.set({
+					startingBracketIdx: null,
+				})
+				.where("tournamentId", "=", tournamentId)
+				.execute();
 		}
 
 		const newSettings: Tables["Tournament"]["settings"] = {
@@ -693,6 +751,29 @@ export function updateProgression({
 			.where("id", "=", tournamentId)
 			.execute();
 	});
+}
+
+export function overrideTeamBracketProgression({
+	tournamentId,
+	tournamentTeamId,
+	sourceBracketIdx,
+	destinationBracketIdx,
+}: {
+	tournamentId: number;
+	tournamentTeamId: number;
+	sourceBracketIdx: number;
+	destinationBracketIdx: number;
+}) {
+	// set in migration: unique("sourceBracketIdx", "tournamentTeamId") on conflict replace
+	return db
+		.insertInto("TournamentBracketProgressionOverride")
+		.values({
+			tournamentId,
+			tournamentTeamId,
+			sourceBracketIdx,
+			destinationBracketIdx,
+		})
+		.execute();
 }
 
 export function updateTeamName({
