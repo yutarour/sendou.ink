@@ -11,8 +11,9 @@ import { Button, LinkButton } from "~/components/Button";
 import { Flag } from "~/components/Flag";
 import { FormWithConfirm } from "~/components/FormWithConfirm";
 import { WeaponImage } from "~/components/Image";
-import { Popover } from "~/components/Popover";
 import { Redirect } from "~/components/Redirect";
+import { SendouButton } from "~/components/elements/Button";
+import { SendouPopover } from "~/components/elements/Popover";
 import { MicrophoneIcon } from "~/components/icons/Microphone";
 import { TrashIcon } from "~/components/icons/Trash";
 import { useUser } from "~/features/auth/core/user";
@@ -23,7 +24,7 @@ import {
 	tournamentFromDB,
 } from "~/features/tournament-bracket/core/Tournament.server";
 import { useTournament } from "~/features/tournament/routes/to.$id";
-import { parseRequestPayload, validate } from "~/utils/remix.server";
+import { errorToastIfFalsy, parseRequestPayload } from "~/utils/remix.server";
 import { assertUnreachable } from "~/utils/types";
 import { tournamentRegisterPage, userPage } from "~/utils/urls";
 import { deleteSub } from "../queries/deleteSub.server";
@@ -44,10 +45,9 @@ export const action: ActionFunction = async ({ request, params }) => {
 		schema: deleteSubSchema,
 	});
 
-	validate(
+	errorToastIfFalsy(
 		user.id === data.userId || tournament.isOrganizer(user),
 		"You can only delete your own sub post",
-		401,
 	);
 
 	deleteSub({
@@ -133,11 +133,13 @@ function AddOrEditSubButton() {
 
 	if (!tournament.canAddNewSubPost) {
 		return (
-			<Popover buttonChildren={buttonText} triggerClassName="tiny">
+			<SendouPopover
+				trigger={<SendouButton size="small">{buttonText}</SendouButton>}
+			>
 				{data.hasOwnSubPost
 					? "Sub post can't be edited anymore since registration has closed"
 					: "Sub post can't be added anymore since registration has closed"}
-			</Popover>
+			</SendouPopover>
 		);
 	}
 

@@ -1,4 +1,8 @@
-import type { ActionFunction, LoaderFunctionArgs } from "@remix-run/node";
+import type {
+	ActionFunction,
+	LoaderFunctionArgs,
+	MetaFunction,
+} from "@remix-run/node";
 import {
 	unstable_composeUploadHandlers as composeUploadHandlers,
 	unstable_createMemoryUploadHandler as createMemoryUploadHandler,
@@ -18,19 +22,21 @@ import { Combobox } from "~/components/Combobox";
 import { FormMessage } from "~/components/FormMessage";
 import { Label } from "~/components/Label";
 import { Main } from "~/components/Main";
-import { Toggle } from "~/components/Toggle";
 import { UserSearch } from "~/components/UserSearch";
+import { SendouSwitch } from "~/components/elements/Switch";
 import { CrossIcon } from "~/components/icons/Cross";
 import { useUser } from "~/features/auth/core/user";
 import { requireUser } from "~/features/auth/core/user.server";
 import { s3UploadHandler } from "~/features/img-upload";
+import { notify } from "~/features/notifications/core/notify.server";
 import { dateToDatabaseTimestamp } from "~/utils/dates";
 import invariant from "~/utils/invariant";
 import {
 	type SendouRouteHandle,
+	errorToastIfFalsy,
 	parseFormData,
 	parseRequestPayload,
-	validate,
+	unauthorizedIfFalsy,
 } from "~/utils/remix.server";
 import {
 	artPage,
@@ -38,6 +44,7 @@ import {
 	navIconUrl,
 	userArtPage,
 } from "~/utils/urls";
+import { metaTitle } from "../../../utils/remix";
 import { ART, NEW_ART_EXISTING_SEARCH_PARAM_KEY } from "../art-constants";
 import { editArtSchema, newArtSchema } from "../art-schemas.server";
 import { previewUrl } from "../art-utils";
@@ -54,9 +61,15 @@ export const handle: SendouRouteHandle = {
 	}),
 };
 
+export const meta: MetaFunction = () => {
+	return metaTitle({
+		title: "New art",
+	});
+};
+
 export const action: ActionFunction = async ({ request }) => {
 	const user = await requireUser(request);
-	validate(user.isArtist, "Lacking artist role", 403);
+	errorToastIfFalsy(user.isArtist, "Lacking artist role");
 
 	const searchParams = new URL(request.url).searchParams;
 	const artIdRaw = searchParams.get(NEW_ART_EXISTING_SEARCH_PARAM_KEY);
@@ -66,10 +79,9 @@ export const action: ActionFunction = async ({ request }) => {
 		const artId = Number(artIdRaw);
 
 		const existingArt = findArtById(artId);
-		validate(
+		errorToastIfFalsy(
 			existingArt?.authorId === user.id,
-			"Insufficient permissions",
-			401,
+			"Art author is someone else",
 		);
 
 		const data = await parseRequestPayload({
@@ -77,13 +89,29 @@ export const action: ActionFunction = async ({ request }) => {
 			schema: editArtSchema,
 		});
 
-		editArt({
+		const editedArtId = editArt({
 			authorId: user.id,
 			artId,
 			description: data.description,
 			isShowcase: data.isShowcase,
 			linkedUsers: data.linkedUsers,
 			tags: data.tags,
+		});
+
+		const newLinkedUsers = data.linkedUsers.filter(
+			(userId) => !existingArt.linkedUsers.includes(userId),
+		);
+
+		notify({
+			userIds: newLinkedUsers,
+			notification: {
+				type: "TAGGED_TO_ART",
+				meta: {
+					adderUsername: user.username,
+					adderDiscordId: user.discordId,
+					artId: editedArtId,
+				},
+			},
 		});
 	} else {
 		const uploadHandler = composeUploadHandlers(
@@ -103,13 +131,25 @@ export const action: ActionFunction = async ({ request }) => {
 			schema: newArtSchema,
 		});
 
-		addNewArt({
+		const addedArtId = addNewArt({
 			authorId: user.id,
 			description: data.description,
 			url: fileName,
 			validatedAt: user.patronTier ? dateToDatabaseTimestamp(new Date()) : null,
 			linkedUsers: data.linkedUsers,
 			tags: data.tags,
+		});
+
+		notify({
+			userIds: data.linkedUsers,
+			notification: {
+				type: "TAGGED_TO_ART",
+				meta: {
+					adderUsername: user.username,
+					adderDiscordId: user.discordId,
+					artId: addedArtId,
+				},
+			},
 		});
 	}
 
@@ -118,7 +158,7 @@ export const action: ActionFunction = async ({ request }) => {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
 	const user = await requireUser(request);
-	validate(user.isArtist, "Lacking artist role", 403);
+	unauthorizedIfFalsy(user.isArtist);
 
 	const artIdRaw = new URL(request.url).searchParams.get(
 		NEW_ART_EXISTING_SEARCH_PARAM_KEY,
@@ -481,11 +521,12 @@ function ShowcaseToggle() {
 	return (
 		<div>
 			<label htmlFor="isShowcase">{t("art:forms.showcase.title")}</label>
-			<Toggle
-				checked={checked}
-				setChecked={setChecked}
+			<SendouSwitch
+				isSelected={checked}
+				onChange={setChecked}
 				name="isShowcase"
-				disabled={isCurrentlyShowcase}
+				id="isShowcase"
+				isDisabled={isCurrentlyShowcase}
 			/>
 			<FormMessage type="info">{t("art:forms.showcase.info")}</FormMessage>
 		</div>

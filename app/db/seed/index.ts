@@ -1,43 +1,26 @@
 import { faker } from "@faker-js/faker";
+import { sub } from "date-fns";
 import capitalize from "just-capitalize";
 import shuffle from "just-shuffle";
 import { nanoid } from "nanoid";
 import { ADMIN_DISCORD_ID, ADMIN_ID, INVITE_CODE_LENGTH } from "~/constants";
 import { db, sql } from "~/db/sql";
-import { MapPool } from "~/features/map-list-generator/core/map-pool";
-import {
-	lastCompletedVoting,
-	nextNonCompletedVoting,
-	rangeToMonthYear,
-} from "~/features/plus-voting/core";
-import { createVod } from "~/features/vods/queries/createVod.server";
-import type {
-	AbilityType,
-	MainWeaponId,
-	StageId,
-} from "~/modules/in-game-lists";
-import {
-	abilities,
-	clothesGearIds,
-	headGearIds,
-	mainWeaponIds,
-	modesShort,
-	shoesGearIds,
-	stageIds,
-} from "~/modules/in-game-lists";
-import { rankedModesShort } from "~/modules/in-game-lists/modes";
-import { dateToDatabaseTimestamp } from "~/utils/dates";
-import invariant from "~/utils/invariant";
-import { mySlugify } from "~/utils/urls";
-
 import type { SeedVariation } from "~/features/api-private/routes/seed";
 import * as BuildRepository from "~/features/builds/BuildRepository.server";
 import * as CalendarRepository from "~/features/calendar/CalendarRepository.server";
 import { persistedTags } from "~/features/calendar/calendar-constants";
 import * as LFGRepository from "~/features/lfg/LFGRepository.server";
 import { TIMEZONES } from "~/features/lfg/lfg-constants";
+import { MapPool } from "~/features/map-list-generator/core/map-pool";
+import * as NotificationRepository from "~/features/notifications/NotificationRepository.server";
+import type { Notification } from "~/features/notifications/notifications-types";
 import * as PlusSuggestionRepository from "~/features/plus-suggestions/PlusSuggestionRepository.server";
 import * as PlusVotingRepository from "~/features/plus-voting/PlusVotingRepository.server";
+import {
+	lastCompletedVoting,
+	nextNonCompletedVoting,
+	rangeToMonthYear,
+} from "~/features/plus-voting/core";
 import * as QMatchRepository from "~/features/sendouq-match/QMatchRepository.server";
 import * as QSettingsRepository from "~/features/sendouq-settings/QSettingsRepository.server";
 import { BANNED_MAPS } from "~/features/sendouq-settings/banned-maps";
@@ -61,9 +44,32 @@ import { setGroupAsInactive } from "~/features/sendouq/queries/setGroupAsInactiv
 import { clearAllTournamentDataCache } from "~/features/tournament-bracket/core/Tournament.server";
 import { TOURNAMENT } from "~/features/tournament/tournament-constants";
 import * as UserRepository from "~/features/user-page/UserRepository.server";
+import { createVod } from "~/features/vods/queries/createVod.server";
+import {
+	secondsToHoursMinutesSecondString,
+	youtubeIdToYoutubeUrl,
+} from "~/features/vods/vods-utils";
+import type {
+	AbilityType,
+	MainWeaponId,
+	StageId,
+} from "~/modules/in-game-lists";
+import {
+	abilities,
+	clothesGearIds,
+	headGearIds,
+	mainWeaponIds,
+	modesShort,
+	shoesGearIds,
+	stageIds,
+} from "~/modules/in-game-lists";
+import { rankedModesShort } from "~/modules/in-game-lists/modes";
 import type { TournamentMapListMap } from "~/modules/tournament-map-list-generator";
 import { SENDOUQ_DEFAULT_MAPS } from "~/modules/tournament-map-list-generator/constants";
 import { nullFilledArray, pickRandomItem } from "~/utils/arrays";
+import { dateToDatabaseTimestamp } from "~/utils/dates";
+import invariant from "~/utils/invariant";
+import { mySlugify } from "~/utils/urls";
 import type { Tables, UserMapModePreferences } from "../tables";
 import type { Art, UserSubmittedImage } from "../types";
 import {
@@ -154,7 +160,7 @@ const basicSeeds = (variation?: SeedVariation | null) => [
 	tournamentSubs,
 	adminBuilds,
 	manySplattershotBuilds,
-	detailedTeam,
+	detailedTeam(variation),
 	otherTeams,
 	realVideo,
 	realVideoCast,
@@ -166,6 +172,7 @@ const basicSeeds = (variation?: SeedVariation | null) => [
 	groups,
 	friendCodes,
 	lfgPosts,
+	notifications,
 ];
 
 export async function seed(variation?: SeedVariation | null) {
@@ -216,6 +223,8 @@ function wipeDB() {
 		"XRankPlacement",
 		"SplatoonPlayer",
 		"UserFriendCode",
+		"NotificationUser",
+		"Notification",
 		"User",
 		"PlusSuggestion",
 		"PlusVote",
@@ -241,7 +250,6 @@ async function adminUser() {
 		twitch: "Sendou",
 		youtubeId: "UCWbJLXByvsfQvTcR4HLPs5Q",
 		discordAvatar: ADMIN_TEST_AVATAR,
-		twitter: "sendouc",
 		discordUniqueName: "sendou",
 	});
 }
@@ -290,7 +298,6 @@ function nzapUser() {
 		twitch: null,
 		youtubeId: null,
 		discordAvatar: NZAP_TEST_AVATAR,
-		twitter: null,
 		discordUniqueName: null,
 	});
 }
@@ -470,7 +477,6 @@ function fakeUser(usedNames: Set<string>) {
 		discordId: String(faker.string.numeric(17)),
 		discordName: uniqueDiscordName(usedNames),
 		twitch: null,
-		twitter: null,
 		youtubeId: null,
 		discordUniqueName: null,
 	});
@@ -556,8 +562,8 @@ async function lastMonthSuggestions() {
 }
 
 async function thisMonthsSuggestions() {
-	const usersInPlus = (await UserRepository.findAllPlusMembers()).filter(
-		(u) => u.id !== ADMIN_ID,
+	const usersInPlus = (await UserRepository.findAllPlusServerMembers()).filter(
+		(u) => u.userId !== ADMIN_ID,
 	);
 	const range = nextNonCompletedVoting(new Date());
 	invariant(range, "No next voting found");
@@ -572,7 +578,7 @@ async function thisMonthsSuggestions() {
 			invariant(suggester.plusTier);
 
 			await PlusSuggestionRepository.create({
-				authorId: suggester.id,
+				authorId: suggester.userId,
 				month,
 				year,
 				suggestedId: userId,
@@ -639,7 +645,12 @@ function badgesToUsers() {
 			});
 			i++
 		) {
-			const userToGetABadge = userIds.shift()!;
+			let userToGetABadge = userIds.shift()!;
+			if (userToGetABadge === NZAP_TEST_ID && id === 1) {
+				// e2e test assumes N-ZAP does not have badge id = 1
+				userToGetABadge = userIds.shift()!;
+			}
+
 			sql
 				.prepare(
 					`insert into "TournamentBadgeOwner" ("badgeId", "userId") values ($id, $userId)`,
@@ -909,15 +920,14 @@ function calendarEventWithToTools(
 							type: "swiss",
 							name: "Swiss",
 							requiresCheckIn: false,
-							settings: {},
+							settings: {
+								groupCount: 2,
+								roundCount: 4,
+							},
 						},
 					],
 					enableNoScreenToggle: true,
 					isRanked: false,
-					swiss: {
-						groupCount: 2,
-						roundCount: 4,
-					},
 				}
 			: event === "SOS"
 				? {
@@ -1559,7 +1569,7 @@ async function manySplattershotBuilds() {
 	}
 }
 
-function detailedTeam() {
+const detailedTeam = (seedVariation?: SeedVariation | null) => () => {
 	sql
 		.prepare(
 			/* sql */ `
@@ -1574,12 +1584,11 @@ function detailedTeam() {
 	sql
 		.prepare(
 			/* sql */ `
-      insert into "AllTeam" ("name", "customUrl", "inviteCode", "twitter", "bio", "avatarImgId", "bannerImgId")
+      insert into "AllTeam" ("name", "customUrl", "inviteCode", "bio", "avatarImgId", "bannerImgId")
        values (
           'Alliance Rogue',
           'alliance-rogue',
           '${nanoid(INVITE_CODE_LENGTH)}',
-          'AllianceRogueFR',
           '${faker.lorem.paragraph()}',
           1,
           2
@@ -1591,6 +1600,9 @@ function detailedTeam() {
 	const userIds = userIdsInRandomOrder(true).filter(
 		(id) => id !== NZAP_TEST_ID,
 	);
+	if (seedVariation === "NZAP_IN_TEAM") {
+		userIds.unshift(NZAP_TEST_ID);
+	}
 	for (let i = 0; i < 5; i++) {
 		const userId = i === 0 ? ADMIN_ID : userIds.shift()!;
 
@@ -1609,7 +1621,7 @@ function detailedTeam() {
 			)
 			.run();
 	}
-}
+};
 
 function otherTeams() {
 	const usersInTeam = (
@@ -1639,13 +1651,12 @@ function otherTeams() {
 		sql
 			.prepare(
 				/* sql */ `
-      insert into "AllTeam" ("id", "name", "customUrl", "inviteCode", "twitter", "bio")
+      insert into "AllTeam" ("id", "name", "customUrl", "inviteCode", "bio")
        values (
           @id,
           @name,
           @customUrl,
           @inviteCode,
-          @twitter,
           @bio
        )
     `,
@@ -1655,7 +1666,6 @@ function otherTeams() {
 				name: teamName,
 				customUrl: teamCustomUrl,
 				inviteCode: nanoid(INVITE_CODE_LENGTH),
-				twitter: faker.internet.username(),
 				bio: faker.lorem.paragraph(),
 			});
 
@@ -1685,47 +1695,50 @@ function otherTeams() {
 function realVideo() {
 	createVod({
 		type: "TOURNAMENT",
-		youtubeId: "M4aV-BQWlVg",
-		youtubeDate: dateToDatabaseTimestamp(new Date("02-02-2023")),
+		youtubeUrl: youtubeIdToYoutubeUrl("M4aV-BQWlVg"),
+		date: { day: 2, month: 2, year: 2023 },
 		submitterUserId: ADMIN_ID,
 		title: "LUTI Division X Tournament - ABBF (THRONE) vs. Ascension",
-		povUserId: NZAP_TEST_ID,
+		pov: {
+			type: "USER",
+			userId: NZAP_TEST_ID,
+		},
 		isValidated: true,
 		matches: [
 			{
 				mode: "SZ",
 				stageId: 8,
-				startsAt: 13,
+				startsAt: secondsToHoursMinutesSecondString(13),
 				weapons: [3040],
 			},
 			{
 				mode: "CB",
 				stageId: 6,
-				startsAt: 307,
+				startsAt: secondsToHoursMinutesSecondString(307),
 				weapons: [3040],
 			},
 			{
 				mode: "TC",
 				stageId: 2,
-				startsAt: 680,
+				startsAt: secondsToHoursMinutesSecondString(680),
 				weapons: [3040],
 			},
 			{
 				mode: "SZ",
 				stageId: 9,
-				startsAt: 1186,
+				startsAt: secondsToHoursMinutesSecondString(1186),
 				weapons: [3040],
 			},
 			{
 				mode: "RM",
 				stageId: 2,
-				startsAt: 1386,
+				startsAt: secondsToHoursMinutesSecondString(1386),
 				weapons: [3000],
 			},
 			{
 				mode: "TC",
 				stageId: 4,
-				startsAt: 1586,
+				startsAt: secondsToHoursMinutesSecondString(1586),
 				weapons: [1110],
 			},
 			// there are other matches too...
@@ -1736,8 +1749,8 @@ function realVideo() {
 function realVideoCast() {
 	createVod({
 		type: "CAST",
-		youtubeId: "M4aV-BQWlVg",
-		youtubeDate: dateToDatabaseTimestamp(new Date("02-02-2023")),
+		youtubeUrl: youtubeIdToYoutubeUrl("M4aV-BQWlVg"),
+		date: { day: 2, month: 2, year: 2023 },
 		submitterUserId: ADMIN_ID,
 		title: "LUTI Division X Tournament - ABBF (THRONE) vs. Ascension",
 		isValidated: true,
@@ -1745,25 +1758,25 @@ function realVideoCast() {
 			{
 				mode: "SZ",
 				stageId: 8,
-				startsAt: 13,
+				startsAt: secondsToHoursMinutesSecondString(13),
 				weapons: [3040, 1000, 2000, 4000, 5000, 6000, 7010, 8000],
 			},
 			{
 				mode: "CB",
 				stageId: 6,
-				startsAt: 307,
+				startsAt: secondsToHoursMinutesSecondString(307),
 				weapons: [3040, 1001, 2010, 4001, 5001, 6010, 7020, 8010],
 			},
 			{
 				mode: "TC",
 				stageId: 2,
-				startsAt: 680,
+				startsAt: secondsToHoursMinutesSecondString(680),
 				weapons: [3040, 1010, 2020, 4010, 5010, 6020, 7010, 8000],
 			},
 			{
 				mode: "SZ",
 				stageId: 9,
-				startsAt: 1186,
+				startsAt: secondsToHoursMinutesSecondString(1186),
 				weapons: [3040, 1020, 2030, 4020, 5020, 6020, 7020, 8010],
 			},
 			// there are other matches too...
@@ -2268,4 +2281,111 @@ async function lfgPosts() {
 		type: "TEAM_FOR_PLAYER",
 		teamId: 1,
 	});
+}
+
+async function notifications() {
+	const values: Notification[] = [
+		{
+			type: "PLUS_SUGGESTION_ADDED",
+			meta: { tier: 1 },
+		},
+		{
+			type: "SEASON_STARTED",
+			meta: { seasonNth: 1 },
+		},
+		{
+			type: "TO_ADDED_TO_TEAM",
+			meta: {
+				adderUsername: "N-ZAP",
+				teamName: "Chimera",
+				tournamentId: 1,
+				tournamentName: "PICNIC #2",
+				tournamentTeamId: 1,
+			},
+		},
+		{
+			type: "TO_BRACKET_STARTED",
+			meta: {
+				tournamentId: 1,
+				tournamentName: "PICNIC #2",
+				bracketIdx: 0,
+				bracketName: "Groups Stage",
+			},
+		},
+		{
+			type: "BADGE_ADDED",
+			meta: { badgeName: "In The Zone 20-29", badgeId: 39 },
+		},
+		{
+			type: "TAGGED_TO_ART",
+			meta: {
+				adderUsername: "N-ZAP",
+				adderDiscordId: NZAP_TEST_DISCORD_ID,
+				artId: 1, // does not exist
+			},
+		},
+		{
+			type: "SQ_ADDED_TO_GROUP",
+			meta: { adderUsername: "N-ZAP" },
+		},
+		{
+			type: "SQ_NEW_MATCH",
+			meta: { matchId: 100 },
+		},
+		{
+			type: "PLUS_VOTING_STARTED",
+			meta: { seasonNth: 1 },
+		},
+		{
+			type: "TO_CHECK_IN_OPENED",
+			meta: { tournamentId: 1, tournamentName: "PICNIC #2" },
+			pictureUrl:
+				"http://localhost:5173/static-assets/img/tournament-logos/pn.png",
+		},
+	];
+
+	for (const [i, value] of values.entries()) {
+		await NotificationRepository.insert(value, [
+			{
+				userId: ADMIN_ID,
+				seen: i <= 7 ? 1 : 0,
+			},
+		]);
+		await NotificationRepository.insert(value, [
+			{
+				userId: NZAP_TEST_ID,
+				seen: i <= 7 ? 1 : 0,
+			},
+		]);
+	}
+
+	const createdAts = [
+		sub(new Date(), { days: 10 }),
+		sub(new Date(), { days: 8 }),
+		sub(new Date(), { days: 5, hours: 2 }),
+		sub(new Date(), { days: 4, minutes: 30 }),
+		sub(new Date(), { days: 3, hours: 2 }),
+		sub(new Date(), { days: 3, hours: 1, minutes: 10 }),
+		sub(new Date(), { days: 2, hours: 5 }),
+		sub(new Date(), { minutes: 10 }),
+		sub(new Date(), { minutes: 5 }),
+	];
+
+	invariant(
+		values.length - 1 === createdAts.length,
+		"values and createdAts length mismatch",
+	);
+
+	for (let i = 0; i < values.length - 1; i++) {
+		sql
+			.prepare(/* sql */ `
+			update "Notification"
+			set "createdAt" = @createdAt
+			where "id" = @id
+		`)
+			.run({
+				createdAt: dateToDatabaseTimestamp(createdAts[i]),
+				id: i + 1,
+			});
+	}
 }

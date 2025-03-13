@@ -3,18 +3,11 @@ import type { BuildAbilitiesTupleWithUnknown } from "./modules/in-game-lists";
 export const TWEET_LENGTH_MAX_LENGTH = 280;
 export const DISCORD_MESSAGE_MAX_LENGTH = 2000;
 
-const EMPTY_CHARACTERS = ["\u200B", "\u200C", "\u200D", "\u200E", "\u200F"];
-export const notAllEmptyCharactersRegExp = new RegExp(
-	`^(?!(${EMPTY_CHARACTERS.join("|")})+$).*$`,
-);
-
 export const USER = {
 	BIO_MAX_LENGTH: DISCORD_MESSAGE_MAX_LENGTH,
 	CUSTOM_URL_MAX_LENGTH: 32,
 	CUSTOM_NAME_MAX_LENGTH: 32,
-	CUSTOM_NAME_REGEXP: notAllEmptyCharactersRegExp,
 	BATTLEFY_MAX_LENGTH: 32,
-	BSKY_MAX_LENGTH: 50,
 	IN_GAME_NAME_TEXT_MAX_LENGTH: 20,
 	IN_GAME_NAME_DISCRIMINATOR_MAX_LENGTH: 5,
 	WEAPON_POOL_MAX_SIZE: 5,
@@ -135,3 +128,15 @@ export const PATCHES = [
 	//   date: "2023-08-30",
 	// },
 ];
+
+export const CUSTOM_CSS_VAR_COLORS = [
+	"bg",
+	"bg-darker",
+	"bg-lighter",
+	"bg-lightest",
+	"text",
+	"text-lighter",
+	"theme",
+	"theme-secondary",
+	"chat",
+] as const;

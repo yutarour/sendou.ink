@@ -1,10 +1,16 @@
 import type { ExpressionBuilder, FunctionModule, NotNull } from "kysely";
 import { sql } from "kysely";
-import { jsonArrayFrom, jsonObjectFrom } from "kysely/helpers/sqlite";
+import { jsonArrayFrom } from "kysely/helpers/sqlite";
 import { db, sql as dbDirect } from "~/db/sql";
-import type { BuildSort, DB, TablesInsertable } from "~/db/tables";
+import type {
+	BuildSort,
+	DB,
+	TablesInsertable,
+	UserPreferences,
+} from "~/db/tables";
 import type { User } from "~/db/types";
 import { dateToDatabaseTimestamp } from "~/utils/dates";
+import invariant from "~/utils/invariant";
 import type { CommonUser } from "~/utils/kysely.server";
 import { COMMON_USER_FIELDS } from "~/utils/kysely.server";
 import { safeNumberParse } from "~/utils/number";
@@ -137,7 +143,6 @@ export async function findProfileByIdentifier(
 		.leftJoin("PlusTier", "PlusTier.userId", "User.id")
 		.select(({ eb }) => [
 			"User.twitch",
-			"User.twitter",
 			"User.youtubeId",
 			"User.battlefy",
 			"User.bsky",
@@ -159,24 +164,6 @@ export async function findProfileByIdentifier(
 					.whereRef("UserWeapon.userId", "=", "User.id")
 					.orderBy("UserWeapon.order", "asc"),
 			).as("weapons"),
-			jsonObjectFrom(
-				eb
-					.selectFrom("TeamMember")
-					.innerJoin("Team", "Team.id", "TeamMember.teamId")
-					.leftJoin(
-						"UserSubmittedImage",
-						"UserSubmittedImage.id",
-						"Team.avatarImgId",
-					)
-					.select([
-						"Team.name",
-						"Team.customUrl",
-						"Team.id",
-						"TeamMember.role as userTeamRole",
-						"UserSubmittedImage.url as avatarUrl",
-					])
-					.whereRef("TeamMember.userId", "=", "User.id"),
-			).as("team"),
 			jsonArrayFrom(
 				eb
 					.selectFrom("TeamMemberWithSecondary")
@@ -190,12 +177,12 @@ export async function findProfileByIdentifier(
 						"Team.name",
 						"Team.customUrl",
 						"Team.id",
+						"TeamMemberWithSecondary.isMainTeam",
 						"TeamMemberWithSecondary.role as userTeamRole",
 						"UserSubmittedImage.url as avatarUrl",
 					])
-					.whereRef("TeamMemberWithSecondary.userId", "=", "User.id")
-					.where("TeamMemberWithSecondary.isMainTeam", "=", 0),
-			).as("secondaryTeams"),
+					.whereRef("TeamMemberWithSecondary.userId", "=", "User.id"),
+			).as("teams"),
 			jsonArrayFrom(
 				eb
 					.selectFrom("BadgeOwner")
@@ -236,6 +223,9 @@ export async function findProfileByIdentifier(
 
 	return {
 		...row,
+		team: row.teams.find((t) => t.isMainTeam),
+		secondaryTeams: row.teams.filter((t) => !t.isMainTeam),
+		teams: undefined,
 		// TODO: sort in SQL
 		badges: row.badges.sort((a, b) => {
 			if (a.id === row.favoriteBadgeId) {
@@ -291,6 +281,7 @@ export function findLeanById(id: number) {
 			"User.favoriteBadgeId",
 			"User.languages",
 			"User.inGameName",
+			"User.preferences",
 			"PlusTier.tier as plusTier",
 			eb
 				.selectFrom("UserFriendCode")
@@ -313,11 +304,15 @@ export function findAllPatrons() {
 		.execute();
 }
 
-export function findAllPlusMembers() {
+export function findAllPlusServerMembers() {
 	return db
 		.selectFrom("User")
 		.innerJoin("PlusTier", "PlusTier.userId", "User.id")
-		.select(["User.id", "User.discordId", "PlusTier.tier as plusTier"])
+		.select([
+			"User.id as userId",
+			"User.discordId",
+			"PlusTier.tier as plusTier",
+		])
 		.execute();
 }
 
@@ -461,7 +456,6 @@ export async function search({
 					eb("User.username", "like", query),
 					eb("User.inGameName", "like", query),
 					eb("User.discordUniqueName", "like", query),
-					eb("User.twitter", "like", query),
 					eb("User.customUrl", "like", query),
 				]),
 			)
@@ -490,7 +484,6 @@ export async function search({
 					eb("User.username", "like", fuzzyQuery),
 					eb("User.inGameName", "like", fuzzyQuery),
 					eb("User.discordUniqueName", "like", fuzzyQuery),
-					eb("User.twitter", "like", fuzzyQuery),
 				])
 				.and(
 					"User.id",
@@ -524,17 +517,24 @@ export function searchExact(args: {
 		.leftJoin("PlusTier", "PlusTier.userId", "User.id")
 		.select(searchSelectedFields);
 
-	if (args.id) {
+	let filtered = false;
+
+	if (typeof args.id === "number") {
+		filtered = true;
 		query = query.where("User.id", "=", args.id);
 	}
 
-	if (args.discordId) {
+	if (typeof args.discordId === "string") {
+		filtered = true;
 		query = query.where("User.discordId", "=", args.discordId);
 	}
 
-	if (args.customUrl) {
+	if (typeof args.customUrl === "string") {
+		filtered = true;
 		query = query.where("User.customUrl", "=", args.customUrl);
 	}
+
+	invariant(filtered, "No search criteria provided");
 
 	return query.execute();
 }
@@ -575,8 +575,8 @@ export function upsert(
 		| "discordAvatar"
 		| "discordUniqueName"
 		| "twitch"
-		| "twitter"
 		| "youtubeId"
+		| "bsky"
 	>,
 ) {
 	return db
@@ -601,7 +601,6 @@ type UpdateProfileArgs = Pick<
 	| "stickSens"
 	| "inGameName"
 	| "battlefy"
-	| "bsky"
 	| "css"
 	| "favoriteBadgeId"
 	| "showDiscordUniqueName"
@@ -644,7 +643,6 @@ export function updateProfile(args: UpdateProfileArgs) {
 				inGameName: args.inGameName,
 				css: args.css,
 				battlefy: args.battlefy,
-				bsky: args.bsky,
 				favoriteBadgeId: args.favoriteBadgeId,
 				showDiscordUniqueName: args.showDiscordUniqueName,
 				commissionText: args.commissionText,
@@ -653,6 +651,35 @@ export function updateProfile(args: UpdateProfileArgs) {
 			.where("id", "=", args.userId)
 			.returning(["User.id", "User.customUrl", "User.discordId"])
 			.executeTakeFirstOrThrow();
+	});
+}
+
+export function updatePreferences(
+	userId: number,
+	newPreferences: UserPreferences,
+) {
+	return db.transaction().execute(async (trx) => {
+		const current =
+			(
+				await trx
+					.selectFrom("User")
+					.select("User.preferences")
+					.where("id", "=", userId)
+					.executeTakeFirstOrThrow()
+			).preferences ?? {};
+
+		const mergedPreferences = {
+			...current,
+			...newPreferences,
+		};
+
+		await trx
+			.updateTable("User")
+			.set({
+				preferences: JSON.stringify(mergedPreferences),
+			})
+			.where("id", "=", userId)
+			.execute();
 	});
 }
 

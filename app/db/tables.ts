@@ -4,9 +4,11 @@ import type {
 	Insertable,
 	Selectable,
 	SqlBool,
+	Updateable,
 } from "kysely";
 import type { TieredSkill } from "~/features/mmr/tiered.server";
-import type { TEAM_MEMBER_ROLES } from "~/features/team";
+import type { Notification as NotificationValue } from "~/features/notifications/notifications-types";
+import type { TEAM_MEMBER_ROLES } from "~/features/team/team-constants";
 import type * as Progression from "~/features/tournament-bracket/core/Progression";
 import type { ParticipantResult } from "~/modules/brackets-model";
 import type {
@@ -34,13 +36,13 @@ export interface Team {
 	id: GeneratedAlways<number>;
 	inviteCode: string;
 	name: string;
-	twitter: string | null;
 	bsky: string | null;
 }
 
 export interface TeamMember {
 	createdAt: Generated<number>;
 	isOwner: Generated<number>;
+	isManager: Generated<number>;
 	leftAt: number | null;
 	role: MemberRole | null;
 	teamId: number;
@@ -331,7 +333,7 @@ export interface PlusSuggestion {
 
 export interface PlusTier {
 	tier: number;
-	userId: number | null;
+	userId: number;
 }
 
 export interface PlusVote {
@@ -568,6 +570,7 @@ export interface TournamentRound {
 	maps: ColumnType<TournamentRoundMaps | null, string | null, string | null>;
 }
 
+// when updating this also update `defaultBracketSettings` in tournament-utils.ts
 export interface TournamentStageSettings {
 	// SE
 	thirdPlaceMatch?: boolean;
@@ -753,6 +756,10 @@ export const BUILD_SORT_IDENTIFIERS = [
 
 export type BuildSort = (typeof BUILD_SORT_IDENTIFIERS)[number];
 
+export interface UserPreferences {
+	disableBuildAbilitySorting?: boolean;
+}
+
 export interface User {
 	/** 1 = permabanned, timestamp = ban active till then */
 	banned: Generated<number | null>;
@@ -784,7 +791,6 @@ export interface User {
 	showDiscordUniqueName: Generated<number>;
 	stickSens: number | null;
 	twitch: string | null;
-	twitter: string | null;
 	bsky: string | null;
 	battlefy: string | null;
 	vc: Generated<"YES" | "NO" | "LISTEN_ONLY">;
@@ -798,6 +804,7 @@ export interface User {
 	plusSkippedForSeasonNth: number | null;
 	noScreen: Generated<number>;
 	buildSorting: ColumnType<BuildSort[] | null, string | null, string | null>;
+	preferences: ColumnType<UserPreferences | null, string | null, string | null>;
 }
 
 export interface UserResultHighlight {
@@ -871,8 +878,41 @@ export interface XRankPlacement {
 	year: number;
 }
 
+export interface Notification {
+	id: GeneratedAlways<number>;
+	type: NotificationValue["type"];
+	meta: ColumnType<
+		Record<string, number | string> | null,
+		string | null,
+		string | null
+	>;
+	pictureUrl: string | null;
+	createdAt: GeneratedAlways<number>;
+}
+
+export interface NotificationUser {
+	notificationId: number;
+	userId: number;
+	seen: Generated<number>;
+}
+
+export interface NotificationSubscription {
+	endpoint: string;
+	keys: {
+		auth: string;
+		p256dh: string;
+	};
+}
+
+export interface NotificationUserSubscription {
+	id: GeneratedAlways<number>;
+	userId: number;
+	subscription: ColumnType<NotificationSubscription, string, string>;
+}
+
 export type Tables = { [P in keyof DB]: Selectable<DB[P]> };
 export type TablesInsertable = { [P in keyof DB]: Insertable<DB[P]> };
+export type TablesUpdatable = { [P in keyof DB]: Updateable<DB[P]> };
 
 export interface DB {
 	AllTeam: Team;
@@ -948,4 +988,7 @@ export interface DB {
 	VideoMatch: VideoMatch;
 	VideoMatchPlayer: VideoMatchPlayer;
 	XRankPlacement: XRankPlacement;
+	Notification: Notification;
+	NotificationUser: NotificationUser;
+	NotificationUserSubscription: NotificationUserSubscription;
 }

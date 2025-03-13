@@ -18,7 +18,6 @@ import { WeaponImage } from "~/components/Image";
 import { Input } from "~/components/Input";
 import { Label } from "~/components/Label";
 import { SubmitButton } from "~/components/SubmitButton";
-import { Toggle } from "~/components/Toggle";
 import { StarIcon } from "~/components/icons/Star";
 import { StarFilledIcon } from "~/components/icons/StarFilled";
 import { TrashIcon } from "~/components/icons/Trash";
@@ -42,11 +41,12 @@ import { rawSensToString } from "~/utils/strings";
 import { FAQ_PAGE, isCustomUrl, userPage } from "~/utils/urls";
 import {
 	actualNumber,
+	actuallyNonEmptyStringOrNull,
 	checkboxValueToDbBoolean,
+	customCssVarObject,
 	dbBoolean,
 	falsyToNull,
 	id,
-	jsonParseable,
 	processMany,
 	safeJSONParse,
 	undefinedToNull,
@@ -54,10 +54,11 @@ import {
 } from "~/utils/zod";
 import { userParamsSchema } from "../user-page-schemas.server";
 import type { UserPageLoaderData } from "./u.$identifier";
-
 import "~/styles/u-edit.css";
+import { SendouSwitch } from "~/components/elements/Switch";
+import { clearTournamentDataCache } from "~/features/tournament-bracket/core/Tournament.server";
 
-const userEditActionSchema = z
+export const userEditActionSchema = z
 	.object({
 		country: z.preprocess(
 			falsyToNull,
@@ -87,21 +88,12 @@ const userEditActionSchema = z
 				.nullable(),
 		),
 		customName: z.preprocess(
-			falsyToNull,
-			z
-				.string()
-				.trim()
-				.regex(USER.CUSTOM_NAME_REGEXP)
-				.max(USER.CUSTOM_NAME_MAX_LENGTH)
-				.nullable(),
+			actuallyNonEmptyStringOrNull,
+			z.string().max(USER.CUSTOM_NAME_MAX_LENGTH).nullable(),
 		),
 		battlefy: z.preprocess(
 			falsyToNull,
 			z.string().max(USER.BATTLEFY_MAX_LENGTH).nullable(),
-		),
-		bsky: z.preprocess(
-			falsyToNull,
-			z.string().max(USER.BSKY_MAX_LENGTH).nullable(),
 		),
 		stickSens: z.preprocess(
 			processMany(actualNumber, undefinedToNull),
@@ -132,7 +124,7 @@ const userEditActionSchema = z
 				.refine((val) => /^[0-9a-z]{4,5}$/.test(val))
 				.nullable(),
 		),
-		css: z.preprocess(falsyToNull, z.string().refine(jsonParseable).nullable()),
+		css: customCssVarObject,
 		weapons: z.preprocess(
 			safeJSONParse,
 			z
@@ -197,10 +189,15 @@ export const action: ActionFunction = async ({ request }) => {
 
 		// TODO: to transaction
 		if (inGameName) {
-			await TournamentTeamRepository.updateMemberInGameNameForNonStarted({
-				inGameName,
-				userId: user.id,
-			});
+			const tournamentIdsAffected =
+				await TournamentTeamRepository.updateMemberInGameNameForNonStarted({
+					inGameName,
+					userId: user.id,
+				});
+
+			for (const tournamentId of tournamentIdsAffected) {
+				clearTournamentDataCache(tournamentId);
+			}
 		}
 
 		throw redirect(userPage(editedUser));
@@ -269,7 +266,6 @@ export default function UserEditPage() {
 				<InGameNameInputs />
 				<SensSelects />
 				<BattlefyInput />
-				<BskyInput />
 				<CountrySelect />
 				<FavBadgeSelect />
 				<WeaponPoolSelect />
@@ -292,7 +288,7 @@ export default function UserEditPage() {
 				)}
 				<FormMessage type="info">
 					<Trans i18nKey={"user:discordExplanation"} t={t}>
-						Username, profile picture, YouTube, Twitter and Twitch accounts come
+						Username, profile picture, YouTube, Bluesky and Twitch accounts come
 						from your Discord account. See <Link to={FAQ_PAGE}>FAQ</Link> for
 						more information.
 					</Trans>
@@ -469,24 +465,6 @@ function BattlefyInput() {
 	);
 }
 
-function BskyInput() {
-	const { t } = useTranslation(["user"]);
-	const data = useLoaderData<typeof loader>();
-
-	return (
-		<div className="w-full">
-			<Label htmlFor="bsky">{t("user:bsky")}</Label>
-			<Input
-				name="bsky"
-				id="bsky"
-				maxLength={USER.BSKY_MAX_LENGTH}
-				defaultValue={data.user.bsky ?? undefined}
-				leftAddon="https://bsky.app/profile/"
-			/>
-		</div>
-	);
-}
-
 function WeaponPoolSelect() {
 	const data = useLoaderData<typeof loader>();
 	const [weapons, setWeapons] = React.useState(data.user.weapons);
@@ -647,9 +625,9 @@ function ShowUniqueDiscordNameToggle() {
 			<label htmlFor="showDiscordUniqueName">
 				{t("user:forms.showDiscordUniqueName")}
 			</label>
-			<Toggle
-				checked={checked}
-				setChecked={setChecked}
+			<SendouSwitch
+				isSelected={checked}
+				onChange={setChecked}
 				name="showDiscordUniqueName"
 			/>
 			<FormMessage type="info">
@@ -674,9 +652,9 @@ function CommissionsOpenToggle({
 	return (
 		<div>
 			<label htmlFor="commissionsOpen">{t("user:forms.commissionsOpen")}</label>
-			<Toggle
-				checked={checked}
-				setChecked={setChecked}
+			<SendouSwitch
+				isSelected={checked}
+				onChange={setChecked}
 				name="commissionsOpen"
 			/>
 		</div>
