@@ -1,25 +1,25 @@
 import { Link, useFetcher, useLoaderData } from "@remix-run/react";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { LinkButton } from "~/components/Button";
+import { LinkButton } from "~/components/elements/Button";
 import { FormMessage } from "~/components/FormMessage";
 import { WeaponImage } from "~/components/Image";
+import { ArrowLeftIcon } from "~/components/icons/ArrowLeft";
 import { Label } from "~/components/Label";
 import { Main } from "~/components/Main";
 import { SubmitButton } from "~/components/SubmitButton";
-import { ArrowLeftIcon } from "~/components/icons/ArrowLeft";
 import type { Tables } from "~/db/tables";
 import { useUser } from "~/features/auth/core/user";
+import { useHasRole } from "~/modules/permissions/hooks";
 import type { SendouRouteHandle } from "~/utils/remix.server";
 import {
 	LFG_PAGE,
-	SENDOUQ_SETTINGS_PAGE,
 	navIconUrl,
+	SENDOUQ_SETTINGS_PAGE,
 	userEditProfilePage,
 } from "~/utils/urls";
-import { LFG, TEAM_POST_TYPES, TIMEZONES } from "../lfg-constants";
-
 import { action } from "../actions/lfg.new.server";
+import { LFG, TEAM_POST_TYPES, TIMEZONES } from "../lfg-constants";
 import { loader } from "../loaders/lfg.new.server";
 export { loader, action };
 
@@ -33,7 +33,7 @@ export const handle: SendouRouteHandle = {
 };
 
 export default function LFGNewPostPage() {
-	const user = useUser();
+	const isPlusServerMember = useHasRole("PLUS_SERVER_MEMBER");
 	const data = useLoaderData<typeof loader>();
 	const fetcher = useFetcher();
 	const { t } = useTranslation(["common", "lfg"]);
@@ -67,7 +67,7 @@ export default function LFGNewPostPage() {
 				/>
 				<TimezoneSelect />
 				<Textarea />
-				{user?.plusTier && type !== "COACH_FOR_TEAM" ? (
+				{isPlusServerMember && type !== "COACH_FOR_TEAM" ? (
 					<PlusVisibilitySelect />
 				) : null}
 				<Languages />

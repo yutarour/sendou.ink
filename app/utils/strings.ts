@@ -1,12 +1,8 @@
-import type { GearType } from "~/db/types";
+import type { GearType } from "~/db/tables";
 import { assertUnreachable } from "./types";
 
 export function inGameNameWithoutDiscriminator(inGameName: string) {
 	return inGameName.split("#")[0];
-}
-
-export function semiRandomId() {
-	return String(Math.random());
 }
 
 export const rawSensToString = (sens: number) =>
@@ -53,10 +49,6 @@ export function gearTypeToInitial(gearType: GearType) {
 	}
 }
 
-export function capitalize(str: string) {
-	return str[0].toUpperCase() + str.slice(1);
-}
-
 export function pathnameFromPotentialURL(maybeUrl: string) {
 	try {
 		return new URL(maybeUrl).pathname.replace("/", "");
@@ -91,14 +83,14 @@ export function removeMarkdown(value: string) {
 			// Remove HTML tags
 			.replace(htmlReplaceRegex, "")
 			// Remove setext-style headers
-			.replace(/^[=\-]{2,}\s*$/g, "")
+			.replace(/^[=-]{2,}\s*$/g, "")
 			// Remove footnotes?
-			.replace(/\[\^.+?\](\: .*?$)?/g, "")
+			.replace(/\[\^.+?\](: .*?$)?/g, "")
 			.replace(/\s{0,2}\[.*?\]: .*?$/g, "")
 			// Remove images
-			.replace(/\!\[(.*?)\][\[\(].*?[\]\)]/g, "")
+			.replace(/!\[(.*?)\][[(].*?[\])]/g, "")
 			// Remove inline links
-			.replace(/\[([^\]]*?)\][\[\(].*?[\]\)]/g, "$2")
+			.replace(/\[([^\]]*?)\][[(].*?[\])]/g, "$2")
 			// Remove blockquotes
 			.replace(/^(\n)?\s{0,3}>\s?/gm, "$1")
 			// Remove reference-style links?
@@ -106,7 +98,7 @@ export function removeMarkdown(value: string) {
 			// Remove headers
 			.replaceAll("#", "")
 			// Remove * emphasis
-			.replace(/([\*]+)(\S)(.*?\S)??\1/g, "$2$3")
+			.replace(/([*]+)(\S)(.*?\S)??\1/g, "$2$3")
 			// Remove _ emphasis. Unlike *, _ emphasis gets rendered only if
 			//   1. Either there is a whitespace character before opening _ and after closing _.
 			//   2. Or _ is at the start/end of the string.

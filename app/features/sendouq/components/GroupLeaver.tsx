@@ -1,6 +1,6 @@
 import { useFetcher } from "@remix-run/react";
 import { useTranslation } from "react-i18next";
-import { Button } from "~/components/Button";
+import { SendouButton } from "~/components/elements/Button";
 import { FormWithConfirm } from "~/components/FormWithConfirm";
 import { SubmitButton } from "~/components/SubmitButton";
 import { SENDOUQ_LOOKING_PAGE } from "~/utils/urls";
@@ -18,12 +18,12 @@ export function GroupLeaver({
 			<FormWithConfirm
 				dialogHeading="Leave this group?"
 				fields={[["_action", "LEAVE_GROUP"]]}
-				deleteButtonText="Leave"
+				submitButtonText="Leave"
 				action={SENDOUQ_LOOKING_PAGE}
 			>
-				<Button variant="minimal-destructive" size="tiny">
+				<SendouButton variant="minimal-destructive" size="small">
 					{t("q:looking.groups.actions.leaveGroup")}
-				</Button>
+				</SendouButton>
 			</FormWithConfirm>
 		);
 	}
@@ -34,7 +34,7 @@ export function GroupLeaver({
 			<SubmitButton
 				_action="LEAVE_GROUP"
 				variant="minimal-destructive"
-				size="tiny"
+				size="small"
 				state={fetcher.state}
 			>
 				{type === "LEAVE_Q"

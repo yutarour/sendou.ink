@@ -3,12 +3,15 @@ import clsx from "clsx";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "~/components/Avatar";
-import { Button } from "~/components/Button";
 import { Divider } from "~/components/Divider";
-import { Flag } from "~/components/Flag";
+import { SendouButton } from "~/components/elements/Button";
+import {
+	SendouTab,
+	SendouTabList,
+	SendouTabPanel,
+	SendouTabs,
+} from "~/components/elements/Tabs";
 import { Image } from "~/components/Image";
-import { Main } from "~/components/Main";
-import { NewTabs } from "~/components/NewTabs";
 import { ArrowRightIcon } from "~/components/icons/ArrowRight";
 import { BSKYLikeIcon } from "~/components/icons/BSKYLike";
 import { BSKYReplyIcon } from "~/components/icons/BSKYReply";
@@ -19,32 +22,26 @@ import { LogOutIcon } from "~/components/icons/LogOut";
 import { SearchIcon } from "~/components/icons/Search";
 import { UsersIcon } from "~/components/icons/Users";
 import { navItems } from "~/components/layout/nav-items";
+import { Main } from "~/components/Main";
 import { useUser } from "~/features/auth/core/user";
+import type { ShowcaseCalendarEvent } from "~/features/calendar/calendar-types";
+import { TournamentCard } from "~/features/calendar/components/TournamentCard";
 import type * as Changelog from "~/features/front-page/core/Changelog.server";
-import {
-	currentOrPreviousSeason,
-	nextSeason,
-	previousSeason,
-} from "~/features/mmr/season";
-import { HACKY_resolvePicture } from "~/features/tournament/tournament-utils";
+import * as Seasons from "~/features/mmr/core/Seasons";
 import { useIsMounted } from "~/hooks/useIsMounted";
-import { databaseTimestampToDate } from "~/utils/dates";
 import type { SendouRouteHandle } from "~/utils/remix.server";
 import {
 	BLANK_IMAGE_URL,
 	CALENDAR_TOURNAMENTS_PAGE,
 	LOG_OUT_URL,
 	LUTI_PAGE,
-	SENDOUQ_PAGE,
 	leaderboardsPage,
 	navIconUrl,
+	SENDOUQ_PAGE,
 	sqHeaderGuyImageUrl,
-	tournamentPage,
-	userSubmittedImage,
 } from "~/utils/urls";
-import type * as ShowcaseTournaments from "../core/ShowcaseTournaments.server";
-import { type LeaderboardEntry, loader } from "../loaders/index.server";
 
+import { type LeaderboardEntry, loader } from "../loaders/index.server";
 export { loader };
 
 import "~/styles/front.css";
@@ -92,15 +89,15 @@ function DesktopSideNav() {
 			})}
 			{user ? (
 				<form method="post" action={LOG_OUT_URL}>
-					<Button
-						size="tiny"
+					<SendouButton
+						size="small"
 						variant="minimal"
 						icon={<LogOutIcon />}
 						type="submit"
 						className="front-page__side-nav__log-out"
 					>
 						{t("common:header.logout")}
-					</Button>
+					</SendouButton>
 				</form>
 			) : null}
 		</nav>
@@ -109,8 +106,8 @@ function DesktopSideNav() {
 
 function SeasonBanner() {
 	const { t, i18n } = useTranslation(["front"]);
-	const season = nextSeason(new Date()) ?? currentOrPreviousSeason(new Date())!;
-	const _previousSeason = previousSeason(new Date());
+	const season = Seasons.next(new Date()) ?? Seasons.currentOrPrevious()!;
+	const _previousSeason = Seasons.previous();
 	const isMounted = useIsMounted();
 
 	const isInFuture = new Date() < season.starts;
@@ -148,11 +145,7 @@ function SeasonBanner() {
 			<Link to={SENDOUQ_PAGE} className="front__season-banner__link">
 				<div className="stack horizontal xs items-center">
 					<Image path={navIconUrl("sendouq")} width={24} alt="" />
-					{isInFuture ? (
-						<>{t("front:sq.prepare")}</>
-					) : (
-						<>{t("front:sq.participate")}</>
-					)}
+					{isInFuture ? t("front:sq.prepare") : t("front:sq.participate")}
 					<ArrowRightIcon />
 				</div>
 			</Link>
@@ -185,65 +178,53 @@ function TournamentCards() {
 		return null;
 	}
 
+	const showSignedUpTab = data.tournaments.participatingFor.length > 0;
+	const showOrganizerTab = data.tournaments.organizingFor.length > 0;
+	const showDiscoverTab = data.tournaments.showcase.length > 0;
+
 	return (
 		<div>
-			<NewTabs
-				disappearing
-				padded={false}
-				tabs={[
-					{
-						label: t("front:showcase.tabs.signedUp"),
-						hidden: data.tournaments.participatingFor.length === 0,
-						icon: <UsersIcon />,
-					},
-					{
-						label: t("front:showcase.tabs.organizer"),
-						hidden: data.tournaments.organizingFor.length === 0,
-						icon: <KeyIcon />,
-					},
-					{
-						label: t("front:showcase.tabs.discover"),
-						hidden: data.tournaments.showcase.length === 0,
-						icon: <SearchIcon />,
-					},
-				]}
-				content={[
-					{
-						key: "your",
-						hidden: data.tournaments.participatingFor.length === 0,
-						element: (
-							<ShowcaseTournamentScroller
-								tournaments={data.tournaments.participatingFor}
-							/>
-						),
-					},
-					{
-						key: "organizer",
-						hidden: data.tournaments.organizingFor.length === 0,
-						element: (
-							<ShowcaseTournamentScroller
-								tournaments={data.tournaments.organizingFor}
-							/>
-						),
-					},
-					{
-						key: "discover",
-						hidden: data.tournaments.showcase.length === 0,
-						element: (
-							<ShowcaseTournamentScroller
-								tournaments={data.tournaments.showcase}
-							/>
-						),
-					},
-				]}
-			/>
+			<SendouTabs padded={false}>
+				<SendouTabList>
+					{showSignedUpTab ? (
+						<SendouTab id="signed-up" icon={<UsersIcon />}>
+							{t("front:showcase.tabs.signedUp")}
+						</SendouTab>
+					) : null}
+					{showOrganizerTab ? (
+						<SendouTab id="organizer" icon={<KeyIcon />}>
+							{t("front:showcase.tabs.organizer")}
+						</SendouTab>
+					) : null}
+					{showDiscoverTab ? (
+						<SendouTab id="discover" icon={<SearchIcon />}>
+							{t("front:showcase.tabs.discover")}
+						</SendouTab>
+					) : null}
+				</SendouTabList>
+				<SendouTabPanel id="signed-up">
+					<ShowcaseTournamentScroller
+						tournaments={data.tournaments.participatingFor}
+					/>
+				</SendouTabPanel>
+				<SendouTabPanel id="organizer">
+					<ShowcaseTournamentScroller
+						tournaments={data.tournaments.organizingFor}
+					/>
+				</SendouTabPanel>
+				<SendouTabPanel id="discover">
+					<ShowcaseTournamentScroller tournaments={data.tournaments.showcase} />
+				</SendouTabPanel>
+			</SendouTabs>
 		</div>
 	);
 }
 
 function ShowcaseTournamentScroller({
 	tournaments,
-}: { tournaments: ShowcaseTournaments.ShowcaseTournament[] }) {
+}: {
+	tournaments: ShowcaseCalendarEvent[];
+}) {
 	return (
 		<div className="front__tournament-cards">
 			<div className="front__tournament-cards__spacer overflow-x-scroll">
@@ -251,7 +232,7 @@ function ShowcaseTournamentScroller({
 					<TournamentCard
 						key={tournament.id}
 						tournament={tournament}
-						topSpaced
+						className="mt-4"
 					/>
 				))}
 			</div>
@@ -274,141 +255,6 @@ function AllTournamentsLinkCard() {
 	);
 }
 
-function TournamentCard({
-	tournament,
-	topSpaced,
-}: {
-	tournament: ShowcaseTournaments.ShowcaseTournament;
-	topSpaced?: boolean;
-}) {
-	const isMounted = useIsMounted();
-	const { t, i18n } = useTranslation(["front", "common"]);
-
-	const time = () => {
-		if (!isMounted) return "Placeholder";
-
-		const date = databaseTimestampToDate(tournament.startTime);
-		return date.toLocaleString(i18n.language, {
-			month: "short",
-			day: "numeric",
-			hour: "numeric",
-			weekday: "short",
-			minute: date.getMinutes() !== 0 ? "numeric" : undefined,
-		});
-	};
-
-	return (
-		<div
-			className={clsx("front__tournament-card__container", {
-				"front__tournament-card__container__tall": tournament.firstPlacer,
-				"mt-4": topSpaced,
-			})}
-		>
-			<Link
-				to={tournamentPage(tournament.id)}
-				className="front__tournament-card"
-			>
-				<div className="stack horizontal justify-between">
-					<div className="front__tournament-card__img-container">
-						<img
-							src={
-								tournament.logoUrl
-									? userSubmittedImage(tournament.logoUrl)
-									: HACKY_resolvePicture(tournament)
-							}
-							width={32}
-							height={32}
-							className="front__tournament-card__tournament-avatar-img"
-							alt=""
-						/>
-					</div>
-					{tournament.organization ? (
-						<div className="front__tournament-card__org">
-							{tournament.organization.name}
-						</div>
-					) : null}
-				</div>
-				<div className="front__tournament-card__name">
-					{tournament.name}{" "}
-					<time
-						className={clsx("front__tournament-card__time", {
-							invisible: !isMounted,
-						})}
-						dateTime={databaseTimestampToDate(
-							tournament.startTime,
-						).toISOString()}
-					>
-						{time()}
-					</time>
-				</div>
-				{tournament.firstPlacer ? (
-					<TournamentFirstPlacers firstPlacer={tournament.firstPlacer} />
-				) : null}
-			</Link>
-			<div className="stack horizontal xxs justify-end">
-				<div className="front__tournament-card__team-count">
-					<UsersIcon /> {tournament.teamsCount}
-				</div>
-				{tournament.isRanked ? (
-					<div className="front__tournament-card__tag front__tournament-card__ranked">
-						{t("front:showcase.card.ranked")}
-					</div>
-				) : (
-					<div className="front__tournament-card__tag front__tournament-card__unranked">
-						{t("front:showcase.card.unranked")}
-					</div>
-				)}
-			</div>
-		</div>
-	);
-}
-
-function TournamentFirstPlacers({
-	firstPlacer,
-}: {
-	firstPlacer: NonNullable<
-		ShowcaseTournaments.ShowcaseTournament["firstPlacer"]
-	>;
-}) {
-	const { t } = useTranslation(["front"]);
-
-	return (
-		<div className="front__tournament-card__first-placers">
-			<div className="stack xs horizontal items-center text-xs">
-				{firstPlacer.logoUrl ? (
-					<img
-						src={userSubmittedImage(firstPlacer.logoUrl)}
-						alt=""
-						width={24}
-						className="rounded-full"
-					/>
-				) : null}{" "}
-				<div className="stack items-start">
-					<span className="front__tournament-card__first-placers__team-name">
-						{firstPlacer.teamName}
-					</span>
-					<div className="text-xxxs text-lighter font-bold text-uppercase">
-						{t("front:showcase.card.winner")}
-					</div>
-				</div>
-			</div>
-			<div className="text-xxs stack items-start mt-1">
-				{firstPlacer.members.map((member) => (
-					<div key={member.id} className="stack horizontal xs items-center">
-						{member.country ? <Flag tiny countryCode={member.country} /> : null}
-						{member.username}{" "}
-					</div>
-				))}
-				{firstPlacer.notShownMembersCount > 0 ? (
-					<div className="font-bold text-lighter">
-						+{firstPlacer.notShownMembersCount}
-					</div>
-				) : null}
-			</div>
-		</div>
-	);
-}
-
 function ResultHighlights() {
 	const { t } = useTranslation(["front"]);
 	const data = useLoaderData<typeof loader>();
@@ -422,7 +268,7 @@ function ResultHighlights() {
 		return null;
 	}
 
-	const season = currentOrPreviousSeason(new Date())!;
+	const season = Seasons.currentOrPrevious()!;
 
 	const recentResults = (
 		<>
@@ -480,7 +326,10 @@ function ResultHighlights() {
 function Leaderboard({
 	entries,
 	fullLeaderboardUrl,
-}: { entries: LeaderboardEntry[]; fullLeaderboardUrl: string }) {
+}: {
+	entries: LeaderboardEntry[];
+	fullLeaderboardUrl: string;
+}) {
 	const { t } = useTranslation(["front"]);
 
 	return (
@@ -544,11 +393,7 @@ function ChangelogList() {
 const ADMIN_PFP_URL =
 	"https://cdn.discordapp.com/avatars/79237403620945920/6fc41a44b069a0d2152ac06d1e496c6c.webp?size=80";
 
-function ChangelogItem({
-	item,
-}: {
-	item: Changelog.ChangelogItem;
-}) {
+function ChangelogItem({ item }: { item: Changelog.ChangelogItem }) {
 	return (
 		<div className="stack sm horizontal">
 			<Avatar size="sm" url={ADMIN_PFP_URL} />
@@ -590,7 +435,11 @@ function BSKYIconLink({
 	children,
 	count,
 	postUrl,
-}: { children: React.ReactNode; count: number; postUrl: string }) {
+}: {
+	children: React.ReactNode;
+	count: number;
+	postUrl: string;
+}) {
 	return (
 		<a
 			href={postUrl}

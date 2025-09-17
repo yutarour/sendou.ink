@@ -1,33 +1,33 @@
-import type {
-	LoaderFunctionArgs,
-	MetaFunction,
-	SerializeFrom,
-} from "@remix-run/node";
+import type { MetaFunction, SerializeFrom } from "@remix-run/node";
 import type { ShouldRevalidateFunction } from "@remix-run/react";
 import { useLoaderData, useSearchParams } from "@remix-run/react";
+import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "~/components/Button";
-import { Combobox } from "~/components/Combobox";
-import { Label } from "~/components/Label";
-import { Main } from "~/components/Main";
+import { AddNewButton } from "~/components/AddNewButton";
+import { SendouButton } from "~/components/elements/Button";
 import { SendouSwitch } from "~/components/elements/Switch";
 import { CrossIcon } from "~/components/icons/Cross";
+import { Label } from "~/components/Label";
+import { Main } from "~/components/Main";
 import type { SendouRouteHandle } from "~/utils/remix.server";
-import { artPage, navIconUrl } from "~/utils/urls";
+import { artPage, navIconUrl, newArtPage } from "~/utils/urls";
 import { metaTags } from "../../../utils/remix";
+import { FILTERED_TAG_KEY_SEARCH_PARAM_KEY } from "../art-constants";
 import { ArtGrid } from "../components/ArtGrid";
-import { allArtTags } from "../queries/allArtTags.server";
-import {
-	showcaseArts,
-	showcaseArtsByTag,
-} from "../queries/showcaseArts.server";
+import { TagSelect } from "../components/TagSelect";
 
-const FILTERED_TAG_KEY = "tag";
+import { loader } from "../loaders/art.server";
+export { loader };
+
 const OPEN_COMMISIONS_KEY = "open";
 
 export const shouldRevalidate: ShouldRevalidateFunction = (args) => {
-	const currentFilteredTag = args.currentUrl.searchParams.get(FILTERED_TAG_KEY);
-	const nextFilteredTag = args.nextUrl.searchParams.get(FILTERED_TAG_KEY);
+	const currentFilteredTag = args.currentUrl.searchParams.get(
+		FILTERED_TAG_KEY_SEARCH_PARAM_KEY,
+	);
+	const nextFilteredTag = args.nextUrl.searchParams.get(
+		FILTERED_TAG_KEY_SEARCH_PARAM_KEY,
+	);
 
 	if (currentFilteredTag === nextFilteredTag) return false;
 
@@ -57,26 +57,13 @@ export const meta: MetaFunction = (args) => {
 	});
 };
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-	const allTags = allArtTags();
-
-	const filteredTagName = new URL(request.url).searchParams.get(
-		FILTERED_TAG_KEY,
-	);
-	const filteredTag = allTags.find((t) => t.name === filteredTagName);
-
-	return {
-		arts: filteredTag ? showcaseArtsByTag(filteredTag.id) : showcaseArts(),
-		allTags,
-	};
-};
-
 export default function ArtPage() {
 	const { t } = useTranslation(["art", "common"]);
 	const data = useLoaderData<typeof loader>();
 	const [searchParams, setSearchParams] = useSearchParams();
+	const switchId = React.useId();
 
-	const filteredTag = searchParams.get(FILTERED_TAG_KEY);
+	const filteredTag = searchParams.get(FILTERED_TAG_KEY_SEARCH_PARAM_KEY);
 	const showOpenCommissions = searchParams.get(OPEN_COMMISIONS_KEY) === "true";
 
 	const arts = !showOpenCommissions
@@ -95,47 +82,43 @@ export default function ArtPage() {
 								return prev;
 							})
 						}
-						id="open"
+						id={switchId}
 					/>
-					<Label htmlFor="open" className="m-auto-0">
+					<Label htmlFor={switchId} className="m-auto-0">
 						{t("art:openCommissionsOnly")}
 					</Label>
 				</div>
-				<Combobox
-					key={filteredTag}
-					options={data.allTags.map((t) => ({
-						label: t.name,
-						value: String(t.id),
-					}))}
-					inputName="tags"
-					placeholder={t("art:filterByTag")}
-					initialValue={null}
-					onChange={(selection) => {
-						if (!selection) return;
-
-						setSearchParams((prev) => {
-							prev.set(FILTERED_TAG_KEY, selection.label);
-							return prev;
-						});
-					}}
-				/>
+				<div className="stack horizontal sm items-center">
+					<TagSelect
+						key={filteredTag}
+						tags={data.allTags}
+						onSelectionChange={(tagName) => {
+							setSearchParams((prev) => {
+								prev.set(FILTERED_TAG_KEY_SEARCH_PARAM_KEY, tagName as string);
+								return prev;
+							});
+						}}
+					/>
+					<AddNewButton navIcon="art" to={newArtPage()} />
+				</div>
 			</div>
 			{filteredTag ? (
 				<div className="text-xs text-lighter stack md horizontal items-center">
 					{t("art:filteringByTag", { tag: filteredTag })}
-					<Button
-						size="tiny"
+					<SendouButton
+						size="small"
 						variant="minimal-destructive"
 						icon={<CrossIcon />}
-						onClick={() => {
+						onPress={() => {
 							setSearchParams((prev) => {
-								prev.delete(FILTERED_TAG_KEY);
+								prev.delete(FILTERED_TAG_KEY_SEARCH_PARAM_KEY);
 								return prev;
 							});
 						}}
+						data-testid="clear-filter-button"
 					>
 						{t("common:actions.clear")}
-					</Button>
+					</SendouButton>
 				</div>
 			) : null}
 			<ArtGrid arts={arts} />

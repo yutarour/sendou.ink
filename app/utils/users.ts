@@ -1,14 +1,5 @@
-import type { User } from "~/db/types";
-import { isAdmin } from "~/permissions";
+import { logger } from "./logger";
 import { isCustomUrl } from "./urls";
-
-export function isAtLeastFiveDollarTierPatreon(
-	user?: Pick<User, "patronTier" | "id">,
-) {
-	if (!user) return false;
-
-	return isAdmin(user) || (user.patronTier && user.patronTier >= 2);
-}
 
 const longUrlRegExp = /(https:\/\/)?sendou.ink\/u\/(.+)/;
 const shortUrlRegExp = /(https:\/\/)?snd.ink\/(.+)/;
@@ -45,7 +36,7 @@ export function queryToUserIdentifier(
 const DISCORD_EPOCH = 1420070400000;
 
 // Converts a snowflake ID string into a JS Date object using the provided epoch (in ms), or Discord's epoch if not provided
-function convertSnowflakeToDate(snowflake: string) {
+export function convertSnowflakeToDate(snowflake: string) {
 	// Convert snowflake to BigInt to extract timestamp bits
 	// https://discord.com/developers/docs/reference#snowflakes
 	const milliseconds = BigInt(snowflake) >> 22n;
@@ -54,13 +45,12 @@ function convertSnowflakeToDate(snowflake: string) {
 
 const AGED_CRITERIA = 1000 * 60 * 60 * 24 * 30 * 3; // 3 months
 export function userDiscordIdIsAged(user: { discordId: string }) {
-	// types should catch this but since this is a permission related
-	// code playing it safe
-	if (!user.discordId) {
-		throw new Error("No discord id");
-	}
-	if (user.discordId.length < DISCORD_ID_MIN_LENGTH) {
-		throw new Error("Not a valid discord id");
+	if (!user.discordId || user.discordId.length < DISCORD_ID_MIN_LENGTH) {
+		logger.error("Invalid or missing discord id", {
+			discordId: user.discordId,
+		});
+
+		return false;
 	}
 
 	const timestamp = convertSnowflakeToDate(user.discordId).getTime();

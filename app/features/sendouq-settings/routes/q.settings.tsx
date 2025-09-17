@@ -1,63 +1,56 @@
-import { RadioGroup } from "@headlessui/react";
-import type {
-	ActionFunctionArgs,
-	LoaderFunctionArgs,
-	MetaFunction,
-} from "@remix-run/node";
+import type { MetaFunction } from "@remix-run/node";
 import { useFetcher, useLoaderData } from "@remix-run/react";
-import clsx from "clsx";
 import * as React from "react";
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Trans } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import { Avatar } from "~/components/Avatar";
-import { Button } from "~/components/Button";
-import { WeaponCombobox } from "~/components/Combobox";
+import { SendouButton } from "~/components/elements/Button";
+import { SendouSwitch } from "~/components/elements/Switch";
 import { FormMessage } from "~/components/FormMessage";
 import { FormWithConfirm } from "~/components/FormWithConfirm";
 import { ModeImage, WeaponImage } from "~/components/Image";
-import { Main } from "~/components/Main";
-import { SubmitButton } from "~/components/SubmitButton";
 import { CrossIcon } from "~/components/icons/Cross";
 import { MapIcon } from "~/components/icons/Map";
 import { MicrophoneFilledIcon } from "~/components/icons/MicrophoneFilled";
 import { PuzzleIcon } from "~/components/icons/Puzzle";
 import { SpeakerFilledIcon } from "~/components/icons/SpeakerFilled";
+import { StarIcon } from "~/components/icons/Star";
+import { StarFilledIcon } from "~/components/icons/StarFilled";
 import { TrashIcon } from "~/components/icons/Trash";
 import { UsersIcon } from "~/components/icons/Users";
+import { Main } from "~/components/Main";
+import { SubmitButton } from "~/components/SubmitButton";
+import { WeaponSelect } from "~/components/WeaponSelect";
 import type { Preference, Tables, UserMapModePreferences } from "~/db/tables";
-import { requireUserId } from "~/features/auth/core/user.server";
 import {
 	soundCodeToLocalStorageKey,
 	soundVolume,
 } from "~/features/chat/chat-utils";
-import * as QSettingsRepository from "~/features/sendouq-settings/QSettingsRepository.server";
 import { useIsMounted } from "~/hooks/useIsMounted";
 import { languagesUnified } from "~/modules/i18n/config";
-import type { MainWeaponId, ModeShort } from "~/modules/in-game-lists";
 import { modesShort } from "~/modules/in-game-lists/modes";
-import {
-	type SendouRouteHandle,
-	parseRequestPayload,
-} from "~/utils/remix.server";
+import type { ModeShort } from "~/modules/in-game-lists/types";
+import { metaTags } from "~/utils/remix";
+import type { SendouRouteHandle } from "~/utils/remix.server";
 import { assertUnreachable } from "~/utils/types";
 import {
+	navIconUrl,
 	SENDOUQ_PAGE,
 	SENDOUQ_SETTINGS_PAGE,
-	navIconUrl,
-	preferenceEmojiUrl,
 	soundPath,
 } from "~/utils/urls";
+import { action } from "../actions/q.settings.server";
 import { BANNED_MAPS } from "../banned-maps";
 import { ModeMapPoolPicker } from "../components/ModeMapPoolPicker";
+import { PreferenceRadioGroup } from "../components/PreferenceRadioGroup";
+import { loader } from "../loaders/q.settings.server";
 import {
 	AMOUNT_OF_MAPS_IN_POOL_PER_MODE,
 	SENDOUQ_WEAPON_POOL_MAX_SIZE,
 } from "../q-settings-constants";
-import { settingsActionSchema } from "../q-settings-schemas.server";
+export { loader, action };
+
 import "../q-settings.css";
-import { SendouSwitch } from "~/components/elements/Switch";
-import { metaTags } from "~/utils/remix";
 
 export const handle: SendouRouteHandle = {
 	i18n: ["q"],
@@ -82,79 +75,15 @@ export const meta: MetaFunction = (args) => {
 	});
 };
 
-export const action = async ({ request }: ActionFunctionArgs) => {
-	const user = await requireUserId(request);
-	const data = await parseRequestPayload({
-		request,
-		schema: settingsActionSchema,
-	});
-
-	switch (data._action) {
-		case "UPDATE_MAP_MODE_PREFERENCES": {
-			await QSettingsRepository.updateUserMapModePreferences({
-				mapModePreferences: data.mapModePreferences,
-				userId: user.id,
-			});
-			break;
-		}
-		case "UPDATE_VC": {
-			await QSettingsRepository.updateVoiceChat({
-				userId: user.id,
-				vc: data.vc,
-				languages: data.languages,
-			});
-			break;
-		}
-		case "UPDATE_SENDOUQ_WEAPON_POOL": {
-			await QSettingsRepository.updateSendouQWeaponPool({
-				userId: user.id,
-				weaponPool: data.weaponPool,
-			});
-			break;
-		}
-		case "UPDATE_NO_SCREEN": {
-			await QSettingsRepository.updateNoScreen({
-				userId: user.id,
-				noScreen: Number(data.noScreen),
-			});
-			break;
-		}
-		case "REMOVE_TRUST": {
-			await QSettingsRepository.deleteTrustedUser({
-				trustGiverUserId: user.id,
-				trustReceiverUserId: data.userToRemoveTrustFromId,
-			});
-			break;
-		}
-		default: {
-			assertUnreachable(data);
-		}
-	}
-
-	return { ok: true };
-};
-
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-	const user = await requireUserId(request);
-
-	return {
-		settings: await QSettingsRepository.settingsByUserId(user.id),
-		trusted: await QSettingsRepository.findTrustedUsersByGiverId(user.id),
-		team: await QSettingsRepository.currentTeamByUserId(user.id),
-	};
-};
-
 export default function SendouQSettingsPage() {
 	return (
-		<Main className="stack sm">
-			<div className="stack">
-				<MapPicker />
-				<WeaponPool />
-				<VoiceChat />
-				<Sounds />
-				<TrustedUsers />
-				<Misc />
-			</div>
+		<Main>
+			<MapPicker />
+			<WeaponPool />
+			<VoiceChat />
+			<Sounds />
+			<TrustedUsers />
+			<Misc />
 		</Main>
 	);
 }
@@ -262,6 +191,7 @@ function MapPicker() {
 												preference,
 											})
 										}
+										aria-label={`Select preference towards ${modeShort}`}
 									/>
 								</div>
 							);
@@ -318,78 +248,6 @@ function MapPicker() {
 				</div>
 			</fetcher.Form>
 		</details>
-	);
-}
-
-function PreferenceRadioGroup({
-	preference,
-	onPreferenceChange,
-}: {
-	preference?: Preference;
-	onPreferenceChange: (preference: Preference & "NEUTRAL") => void;
-}) {
-	const { t } = useTranslation(["q"]);
-
-	return (
-		<RadioGroup
-			value={preference ?? "NEUTRAL"}
-			onChange={(newPreference) =>
-				onPreferenceChange(newPreference as Preference & "NEUTRAL")
-			}
-			className="stack horizontal xs"
-		>
-			<RadioGroup.Option value="AVOID">
-				{({ checked }) => (
-					<span
-						className={clsx("q-settings__radio", {
-							"q-settings__radio__checked": checked,
-						})}
-					>
-						<img
-							src={preferenceEmojiUrl("AVOID")}
-							className="q-settings__radio__emoji"
-							width={18}
-							alt="Avoid emoji"
-						/>
-						{t("q:settings.maps.avoid")}
-					</span>
-				)}
-			</RadioGroup.Option>
-			<RadioGroup.Option value="NEUTRAL">
-				{({ checked }) => (
-					<span
-						className={clsx("q-settings__radio", {
-							"q-settings__radio__checked": checked,
-						})}
-					>
-						<img
-							src={preferenceEmojiUrl()}
-							className="q-settings__radio__emoji"
-							width={18}
-							alt="Neutral emoji"
-						/>
-						{t("q:settings.maps.neutral")}
-					</span>
-				)}
-			</RadioGroup.Option>
-			<RadioGroup.Option value="PREFER">
-				{({ checked }) => (
-					<span
-						className={clsx("q-settings__radio", {
-							"q-settings__radio__checked": checked,
-						})}
-					>
-						<img
-							src={preferenceEmojiUrl("PREFER")}
-							className="q-settings__radio__emoji"
-							width={18}
-							alt="Prefer emoji"
-						/>
-						{t("q:settings.maps.prefer")}
-					</span>
-				)}
-			</RadioGroup.Option>
-		</RadioGroup>
 	);
 }
 
@@ -502,10 +360,10 @@ function Languages() {
 					return (
 						<div key={code} className="stack horizontal items-center sm">
 							{name}{" "}
-							<Button
+							<SendouButton
 								icon={<CrossIcon />}
 								variant="minimal-destructive"
-								onClick={() => {
+								onPress={() => {
 									const newLanguages = value.filter(
 										(codeInArr) => codeInArr !== code,
 									);
@@ -526,7 +384,7 @@ function WeaponPool() {
 	const [weapons, setWeapons] = React.useState(data.settings.qWeaponPool ?? []);
 	const fetcher = useFetcher();
 
-	const latestWeapon = weapons[weapons.length - 1];
+	const latestWeapon = weapons[weapons.length - 1]?.weaponSplId ?? null;
 
 	return (
 		<details>
@@ -543,50 +401,69 @@ function WeaponPool() {
 				/>
 				<div className="q-settings__weapon-pool-select-container">
 					{weapons.length < SENDOUQ_WEAPON_POOL_MAX_SIZE ? (
-						<div>
-							<WeaponCombobox
-								inputName="weapon"
-								id="weapon"
-								onChange={(weapon) => {
-									if (!weapon) return;
-									setWeapons([
-										...weapons,
-										Number(weapon.value) as MainWeaponId,
-									]);
-								}}
-								// empty on selection
-								key={latestWeapon ?? "empty"}
-								weaponIdsToOmit={new Set(weapons)}
-								fullWidth
-							/>
-						</div>
+						<WeaponSelect
+							onChange={(weaponSplId) => {
+								setWeapons([
+									...weapons,
+									{
+										weaponSplId,
+										isFavorite: 0,
+									},
+								]);
+							}}
+							// empty on selection
+							key={latestWeapon ?? "empty"}
+							disabledWeaponIds={weapons.map((w) => w.weaponSplId)}
+						/>
 					) : (
 						<span className="text-xs text-info">
 							{t("q:settings.weaponPool.full")}
 						</span>
 					)}
 				</div>
-				<div className="stack horizontal sm justify-center">
+				<div className="stack horizontal md justify-center">
 					{weapons.map((weapon) => {
 						return (
-							<div key={weapon} className="stack xs">
+							<div key={weapon.weaponSplId} className="stack xs">
 								<div>
 									<WeaponImage
-										weaponSplId={weapon}
-										variant="badge"
+										weaponSplId={weapon.weaponSplId}
+										variant={weapon.isFavorite ? "badge-5-star" : "badge"}
 										width={38}
 										height={38}
 									/>
 								</div>
 								<div className="stack sm horizontal items-center justify-center">
-									<Button
+									<SendouButton
+										icon={weapon.isFavorite ? <StarFilledIcon /> : <StarIcon />}
+										variant="minimal"
+										aria-label="Favorite weapon"
+										onPress={() =>
+											setWeapons(
+												weapons.map((w) =>
+													w.weaponSplId === weapon.weaponSplId
+														? {
+																...weapon,
+																isFavorite: weapon.isFavorite === 1 ? 0 : 1,
+															}
+														: w,
+												),
+											)
+										}
+									/>
+									<SendouButton
 										icon={<TrashIcon />}
 										variant="minimal-destructive"
 										aria-label="Delete weapon"
-										onClick={() =>
-											setWeapons(weapons.filter((w) => w !== weapon))
+										onPress={() =>
+											setWeapons(
+												weapons.filter(
+													(w) => w.weaponSplId !== weapon.weaponSplId,
+												),
+											)
 										}
-										size="tiny"
+										data-testid={`delete-weapon-${weapon.weaponSplId}`}
+										size="small"
 									/>
 								</div>
 							</div>
@@ -642,6 +519,10 @@ function SoundCheckboxes() {
 		{
 			code: "sq_match",
 			name: t("q:settings.sounds.matchStarted"),
+		},
+		{
+			code: "tournament_match",
+			name: t("q:settings.sounds.tournamentMatchStarted"),
 		},
 	];
 
@@ -734,45 +615,43 @@ function TrustedUsers() {
 			</summary>
 			<div className="mb-4">
 				{data.trusted.length > 0 ? (
-					<>
-						<div className="stack md mt-2">
-							{data.trusted.map((trustedUser) => {
-								return (
-									<div
-										key={trustedUser.id}
-										className="stack horizontal xs items-center"
-									>
-										<Avatar user={trustedUser} size="xxs" />
-										<div className="text-sm font-semi-bold">
-											{trustedUser.username}
-										</div>
-										<FormWithConfirm
-											dialogHeading={t("q:settings.trusted.confirm", {
-												name: trustedUser.username,
-											})}
-											fields={[
-												["_action", "REMOVE_TRUST"],
-												["userToRemoveTrustFromId", trustedUser.id],
-											]}
-											deleteButtonText="Remove"
-										>
-											<Button
-												className="build__small-text"
-												variant="minimal-destructive"
-												size="tiny"
-												type="submit"
-											>
-												<TrashIcon className="build__icon" />
-											</Button>
-										</FormWithConfirm>
+					<div className="stack md mt-2">
+						{data.trusted.map((trustedUser) => {
+							return (
+								<div
+									key={trustedUser.id}
+									className="stack horizontal xs items-center"
+								>
+									<Avatar user={trustedUser} size="xxs" />
+									<div className="text-sm font-semi-bold">
+										{trustedUser.username}
 									</div>
-								);
-							})}
-							<FormMessage type="info">
-								{t("q:settings.trusted.trustedExplanation")}
-							</FormMessage>
-						</div>
-					</>
+									<FormWithConfirm
+										dialogHeading={t("q:settings.trusted.confirm", {
+											name: trustedUser.username,
+										})}
+										fields={[
+											["_action", "REMOVE_TRUST"],
+											["userToRemoveTrustFromId", trustedUser.id],
+										]}
+										submitButtonText="Remove"
+									>
+										<SendouButton
+											className="small-text"
+											variant="minimal-destructive"
+											size="small"
+											type="submit"
+										>
+											<TrashIcon className="small-icon" />
+										</SendouButton>
+									</FormWithConfirm>
+								</div>
+							);
+						})}
+						<FormMessage type="info">
+							{t("q:settings.trusted.trustedExplanation")}
+						</FormMessage>
+					</div>
 				) : (
 					<FormMessage type="info" className="mb-2">
 						{t("q:settings.trusted.noTrustedExplanation")}

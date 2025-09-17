@@ -2,25 +2,22 @@ import { Link } from "@remix-run/react";
 import clsx from "clsx";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import Masonry, { ResponsiveMasonry } from "react-responsive-masonry";
 import { Avatar } from "~/components/Avatar";
-import { Button, LinkButton } from "~/components/Button";
-import { Dialog } from "~/components/Dialog";
+import { LinkButton, SendouButton } from "~/components/elements/Button";
+import { SendouDialog } from "~/components/elements/Dialog";
 import { FormWithConfirm } from "~/components/FormWithConfirm";
-import { Pagination } from "~/components/Pagination";
+import { CrossIcon } from "~/components/icons/Cross";
 import { EditIcon } from "~/components/icons/Edit";
 import { TrashIcon } from "~/components/icons/Trash";
+import { UnlinkIcon } from "~/components/icons/Unlink";
+import { Pagination } from "~/components/Pagination";
 import { useIsMounted } from "~/hooks/useIsMounted";
 import { usePagination } from "~/hooks/usePagination";
 import { useSearchParamState } from "~/hooks/useSearchParamState";
 import { databaseTimestampToDate } from "~/utils/dates";
-import {
-	artPage,
-	conditionalUserSubmittedImage,
-	newArtPage,
-	userArtPage,
-	userPage,
-} from "~/utils/urls";
+import { artPage, newArtPage, userArtPage, userPage } from "~/utils/urls";
+import { conditionalUserSubmittedImage } from "~/utils/urls-img";
+import { ResponsiveMasonry } from "../../../modules/responsive-masonry/components/ResponsiveMasonry";
 import { ART_PER_PAGE } from "../art-constants";
 import type { ListedArt } from "../art-types";
 import { previewUrl } from "../art-utils";
@@ -63,18 +60,16 @@ export function ArtGrid({
 			{bigArt ? (
 				<BigImageDialog close={() => setBigArtId(null)} art={bigArt} />
 			) : null}
-			<ResponsiveMasonry columnsCountBreakPoints={{ 350: 1, 750: 2, 900: 3 }}>
-				<Masonry gutter="1rem">
-					{itemsToDisplay.map((art) => (
-						<ImagePreview
-							key={art.id}
-							art={art}
-							canEdit={canEdit}
-							enablePreview={enablePreview}
-							onClick={enablePreview ? () => setBigArtId(art.id) : undefined}
-						/>
-					))}
-				</Masonry>
+			<ResponsiveMasonry>
+				{itemsToDisplay.map((art) => (
+					<ImagePreview
+						key={art.id}
+						art={art}
+						canEdit={canEdit}
+						enablePreview={enablePreview}
+						onClick={enablePreview ? () => setBigArtId(art.id) : undefined}
+					/>
+				))}
 			</ResponsiveMasonry>
 			{!everythingVisible ? (
 				<Pagination
@@ -94,11 +89,17 @@ function BigImageDialog({ close, art }: { close: () => void; art: ListedArt }) {
 	const [imageLoaded, setImageLoaded] = React.useState(false);
 
 	return (
-		<Dialog
-			isOpen
-			close={close}
-			className="art__dialog__image-container"
-			closeOnAnyClick
+		<SendouDialog
+			heading={databaseTimestampToDate(art.createdAt).toLocaleDateString(
+				i18n.language,
+				{
+					year: "numeric",
+					month: "long",
+					day: "numeric",
+				},
+			)}
+			onClose={close}
+			isFullScreen
 		>
 			<img
 				alt=""
@@ -136,17 +137,15 @@ function BigImageDialog({ close, art }: { close: () => void; art: ListedArt }) {
 					{art.description}
 				</div>
 			) : null}
-			<div className="text-xxs text-lighter">
-				{databaseTimestampToDate(art.createdAt).toLocaleDateString(
-					i18n.language,
-					{
-						year: "numeric",
-						month: "long",
-						day: "numeric",
-					},
-				)}
-			</div>
-		</Dialog>
+			<SendouButton
+				variant="destructive"
+				className="mx-auto mt-6"
+				onPress={close}
+				icon={<CrossIcon />}
+			>
+				Close
+			</SendouButton>
+		</SendouDialog>
 	);
 }
 
@@ -165,6 +164,7 @@ function ImagePreview({
 	const { t } = useTranslation(["common", "art"]);
 
 	const img = (
+		// biome-ignore lint/a11y/noStaticElementInteractions: Biome v2 migration
 		<img
 			alt=""
 			src={conditionalUserSubmittedImage(previewUrl(art.url))}
@@ -186,17 +186,24 @@ function ImagePreview({
 				>
 					<LinkButton
 						to={newArtPage(art.id)}
-						size="tiny"
+						size="small"
 						variant="outlined"
 						icon={<EditIcon />}
 					>
 						{t("common:actions.edit")}
 					</LinkButton>
 					<FormWithConfirm
-						dialogHeading="Are you sure you want to delete the art?"
-						fields={[["id", art.id]]}
+						dialogHeading={t("art:delete.title")}
+						fields={[
+							["id", art.id],
+							["_action", "DELETE_ART"],
+						]}
 					>
-						<Button icon={<TrashIcon />} variant="destructive" size="tiny" />
+						<SendouButton
+							icon={<TrashIcon />}
+							variant="destructive"
+							size="small"
+						/>
 					</FormWithConfirm>
 				</div>
 			</div>
@@ -209,15 +216,39 @@ function ImagePreview({
 		return (
 			<div>
 				{img}
-				<Link
-					to={userArtPage(art.author, "MADE-BY")}
-					className={clsx("stack sm horizontal text-xs items-center mt-1", {
-						invisible: !imageLoaded,
+				<div
+					className={clsx("stack horizontal justify-between", {
+						"mt-2": canEdit,
 					})}
 				>
-					<Avatar user={art.author} size="xxs" />
-					{t("art:madeBy")} {art.author.username}
-				</Link>
+					<Link
+						to={userArtPage(art.author, "MADE-BY")}
+						className={clsx("stack sm horizontal text-xs items-center mt-1", {
+							invisible: !imageLoaded,
+						})}
+					>
+						<Avatar user={art.author} size="xxs" />
+						{t("art:madeBy")} {art.author.username}
+					</Link>
+					{canEdit ? (
+						<FormWithConfirm
+							dialogHeading={t("art:unlink.title", {
+								username: art.author.username,
+							})}
+							fields={[
+								["id", art.id],
+								["_action", "UNLINK_ART"],
+							]}
+							submitButtonText={t("common:actions.remove")}
+						>
+							<SendouButton
+								icon={<UnlinkIcon />}
+								variant="destructive"
+								size="small"
+							/>
+						</FormWithConfirm>
+					) : null}
+				</div>
 			</div>
 		);
 	}

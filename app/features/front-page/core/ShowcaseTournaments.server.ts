@@ -1,44 +1,25 @@
 import cachified from "@epic-web/cachified";
-import { ONE_HOUR_IN_MS, TWO_HOURS_IN_MS } from "~/constants";
-import type { Tables } from "~/db/tables";
+import type { ShowcaseCalendarEvent } from "~/features/calendar/calendar-types";
 import * as TournamentRepository from "~/features/tournament/TournamentRepository.server";
 import { tournamentIsRanked } from "~/features/tournament/tournament-utils";
-import { cache, ttl } from "~/utils/cache.server";
+import { cache, IN_MILLISECONDS, ttl } from "~/utils/cache.server";
 import {
 	databaseTimestampToDate,
 	dateToDatabaseTimestamp,
 } from "~/utils/dates";
 import type { CommonUser } from "~/utils/kysely.server";
+import { tournamentPage } from "~/utils/urls";
 
 interface ShowcaseTournamentCollection {
-	participatingFor: ShowcaseTournament[];
-	organizingFor: ShowcaseTournament[];
-	showcase: ShowcaseTournament[];
-	results: ShowcaseTournament[];
-}
-
-export interface ShowcaseTournament {
-	id: number;
-	name: string;
-	startTime: number;
-	teamsCount: number;
-	isRanked: boolean;
-	logoUrl: string | null;
-	organization: {
-		name: string;
-		slug: string;
-	} | null;
-	firstPlacer: {
-		teamName: string;
-		logoUrl: string | null;
-		members: (CommonUser & { country: Tables["User"]["country"] })[];
-		notShownMembersCount: number;
-	} | null;
+	participatingFor: ShowcaseCalendarEvent[];
+	organizingFor: ShowcaseCalendarEvent[];
+	showcase: ShowcaseCalendarEvent[];
+	results: ShowcaseCalendarEvent[];
 }
 
 interface ParticipationInfo {
-	participants: Set<ShowcaseTournament["id"]>;
-	organizers: Set<ShowcaseTournament["id"]>;
+	participants: Set<ShowcaseCalendarEvent["id"]>;
+	organizers: Set<ShowcaseCalendarEvent["id"]>;
 }
 
 export async function frontPageTournamentsByUserId(
@@ -54,12 +35,14 @@ export async function frontPageTournamentsByUserId(
 		organizingFor: tournaments.upcoming.filter((tournament) =>
 			participation.organizers.has(tournament.id),
 		),
-		participatingFor: tournaments.upcoming.filter((tournament) =>
-			participation.participants.has(tournament.id),
+		participatingFor: tournaments.upcoming.filter(
+			(tournament) =>
+				!tournament.hidden && participation.participants.has(tournament.id),
 		),
 		showcase: resolveShowcaseTournaments(
 			tournaments.upcoming.filter(
 				(tournament) =>
+					!tournament.hidden &&
 					!participation.organizers.has(tournament.id) &&
 					!participation.participants.has(tournament.id),
 			),
@@ -80,14 +63,17 @@ export function clearParticipationInfoMap() {
 	participationInfoMap = null;
 }
 
-export function addToParticipationInfoMap({
+export function addToCached({
 	userId,
 	tournamentId,
 	type,
+	newTeamCount,
 }: {
 	userId: number;
 	tournamentId: number;
 	type: "participant" | "organizer";
+	/** If a new team joined, the new total team count for the tournament including the new one */
+	newTeamCount?: number;
 }) {
 	if (!participationInfoMap) return;
 
@@ -101,9 +87,16 @@ export function addToParticipationInfoMap({
 	}
 
 	participationInfoMap.set(userId, participation);
+
+	if (typeof newTeamCount === "number") {
+		updateCachedTournamentTeamCount({
+			tournamentId,
+			newTeamCount,
+		});
+	}
 }
 
-export function removeFromParticipationInfoMap({
+export function removeFromCached({
 	userId,
 	tournamentId,
 	type,
@@ -126,9 +119,26 @@ export function removeFromParticipationInfoMap({
 	participationInfoMap.set(userId, participation);
 }
 
+export function updateCachedTournamentTeamCount({
+	tournamentId,
+	newTeamCount,
+}: {
+	tournamentId: number;
+	newTeamCount: number;
+}) {
+	cachedTournaments().then((tournaments) => {
+		const tournament = tournaments.upcoming.find(
+			(tournament) => tournament.id === tournamentId,
+		);
+		if (tournament) {
+			tournament.teamsCount = newTeamCount;
+		}
+	});
+}
+
 async function cachedParticipationInfo(
 	userId: number | null,
-	tournaments: ShowcaseTournament[],
+	tournaments: ShowcaseCalendarEvent[],
 ): Promise<ParticipationInfo> {
 	if (!userId) {
 		return emptyParticipationInfo();
@@ -153,8 +163,7 @@ async function cachedTournaments() {
 	return cachified({
 		key: SHOWCASE_TOURNAMENTS_CACHE_KEY,
 		cache,
-		ttl: ttl(ONE_HOUR_IN_MS),
-		staleWhileRevalidate: ttl(TWO_HOURS_IN_MS),
+		ttl: ttl(IN_MILLISECONDS.TWO_HOURS),
 		async getFreshValue() {
 			const tournaments = await TournamentRepository.forShowcase();
 
@@ -165,7 +174,7 @@ async function cachedTournaments() {
 	});
 }
 
-function deleteExtraResults(tournaments: ShowcaseTournament[]) {
+function deleteExtraResults(tournaments: ShowcaseCalendarEvent[]) {
 	const nonResults = tournaments.filter(
 		(tournament) => !tournament.firstPlacer,
 	);
@@ -193,8 +202,8 @@ function deleteExtraResults(tournaments: ShowcaseTournament[]) {
 }
 
 function resolveShowcaseTournaments(
-	tournaments: ShowcaseTournament[],
-): ShowcaseTournament[] {
+	tournaments: ShowcaseCalendarEvent[],
+): ShowcaseCalendarEvent[] {
 	const happeningDuringNextWeek = tournaments.filter(
 		(tournament) =>
 			tournament.startTime > databaseTimestampSixHoursAgo() &&
@@ -214,7 +223,7 @@ function resolveShowcaseTournaments(
 }
 
 async function tournamentsToParticipationInfoMap(
-	tournaments: ShowcaseTournament[],
+	tournaments: ShowcaseCalendarEvent[],
 ): Promise<Map<CommonUser["id"], ParticipationInfo>> {
 	const tournamentIds = tournaments.map((tournament) => tournament.id);
 	const tournamentsWithUsers =
@@ -261,9 +270,12 @@ const MEMBERS_TO_SHOW = 5;
 
 function mapTournamentFromDB(
 	tournament: TournamentRepository.ForShowcase,
-): ShowcaseTournament {
+): ShowcaseCalendarEvent {
 	return {
+		type: "showcase",
+		url: tournamentPage(tournament.id),
 		id: tournament.id,
+		authorId: tournament.authorId,
 		name: tournament.name,
 		startTime: tournament.startTime,
 		teamsCount: tournament.teamsCount,
@@ -278,7 +290,10 @@ function mapTournamentFromDB(
 			isSetAsRanked: tournament.settings.isRanked,
 			startTime: databaseTimestampToDate(tournament.startTime),
 			minMembersPerTeam: tournament.settings.minMembersPerTeam ?? 4,
+			isTest: tournament.settings.isTest ?? false,
 		}),
+		hidden: Boolean(tournament.hidden),
+		modes: null, // no need to show modes for front page, maybe could in the future?
 		firstPlacer:
 			tournament.firstPlacers.length > 0
 				? {

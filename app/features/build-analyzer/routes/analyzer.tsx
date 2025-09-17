@@ -7,33 +7,37 @@ import { useTranslation } from "react-i18next";
 import { AbilitiesSelector } from "~/components/AbilitiesSelector";
 import { Ability } from "~/components/Ability";
 import Chart from "~/components/Chart";
-import { WeaponCombobox } from "~/components/Combobox";
+import {
+	SendouTab,
+	SendouTabList,
+	SendouTabPanel,
+	SendouTabs,
+} from "~/components/elements/Tabs";
 import { Image } from "~/components/Image";
+import { BeakerIcon } from "~/components/icons/Beaker";
 import { Main } from "~/components/Main";
 import { Table } from "~/components/Table";
-import { Tab, Tabs } from "~/components/Tabs";
-import { BeakerIcon } from "~/components/icons/Beaker";
-import { MAX_AP } from "~/constants";
 import { useUser } from "~/features/auth/core/user";
 import { useIsMounted } from "~/hooks/useIsMounted";
-import type { Ability as AbilityType } from "~/modules/in-game-lists";
+import { abilitiesShort } from "~/modules/in-game-lists/abilities";
+import type {
+	Ability as AbilityType,
+	BuildAbilitiesTupleWithUnknown,
+	MainWeaponId,
+	SubWeaponId,
+} from "~/modules/in-game-lists/types";
+import { isAbility } from "~/modules/in-game-lists/utils";
 import {
 	ANGLE_SHOOTER_ID,
 	BIG_BUBBLER_ID,
-	type BuildAbilitiesTupleWithUnknown,
 	INK_MINE_ID,
 	INK_STORM_ID,
 	KILLER_WAIL_ID,
-	type MainWeaponId,
 	POINT_SENSOR_ID,
-	type SubWeaponId,
 	TORPEDO_ID,
 	TOXIC_MIST_ID,
-	abilitiesShort,
-	isAbility,
-} from "~/modules/in-game-lists";
-import { atOrError, nullFilledArray, removeDuplicates } from "~/utils/arrays";
-import { damageTypeTranslationString } from "~/utils/i18next";
+} from "~/modules/in-game-lists/weapon-ids";
+import { atOrError, nullFilledArray } from "~/utils/arrays";
 import invariant from "~/utils/invariant";
 import type { SendouRouteHandle } from "~/utils/remix.server";
 import {
@@ -49,8 +53,9 @@ import { SendouButton } from "../../../components/elements/Button";
 import { SendouPopover } from "../../../components/elements/Popover";
 import { metaTags } from "../../../utils/remix";
 import {
-	MAX_LDE_INTENSITY,
 	damageTypeToWeaponType,
+	MAX_AP,
+	MAX_LDE_INTENSITY,
 } from "../analyzer-constants";
 import { useAnalyzeBuild } from "../analyzer-hooks";
 import type {
@@ -68,8 +73,8 @@ import {
 	getAbilityChunksMapAsArray,
 } from "../core/abilityChunksCalc";
 import {
-	SPECIAL_EFFECTS,
 	lastDitchEffortIntensityToAp,
+	SPECIAL_EFFECTS,
 } from "../core/specialEffects";
 import { buildStats } from "../core/stats";
 import {
@@ -79,9 +84,13 @@ import {
 	isStackableAbility,
 } from "../core/utils";
 import "../analyzer.css";
+import * as R from "remeda";
 import { SendouSwitch } from "~/components/elements/Switch";
+import { Placeholder } from "~/components/Placeholder";
+import { WeaponSelect } from "~/components/WeaponSelect";
+import { logger } from "~/utils/logger";
 
-export const CURRENT_PATCH = "9.2";
+export const CURRENT_PATCH = "10.1";
 
 export const meta: MetaFunction = (args) => {
 	return metaTags({
@@ -102,14 +111,14 @@ export const handle: SendouRouteHandle = {
 	}),
 };
 
-// Resolves this Github issue: https://github.com/Sendouc/sendou.ink/issues/1053
+// Resolves this Github issue: https://github.com/sendou-ink/sendou.ink/issues/1053
 export const shouldRevalidate: ShouldRevalidateFunction = () => false;
 
 export default function BuildAnalyzerShell() {
 	const isMounted = useIsMounted();
 
 	if (!isMounted) {
-		return null;
+		return <Placeholder />;
 	}
 
 	return <BuildAnalyzerPage />;
@@ -239,85 +248,95 @@ function BuildAnalyzerPage() {
 				<div className="analyzer__left-column">
 					<div className="stack sm items-center w-full">
 						<div className="w-full">
-							<WeaponCombobox
-								inputName="weapon"
-								onChange={(opt) =>
-									opt &&
+							<WeaponSelect
+								label={t("analyzer:weaponSelect.label")}
+								value={mainWeaponId}
+								onChange={(val) =>
 									handleChange({
-										newMainWeaponId: Number(opt.value) as MainWeaponId,
+										newMainWeaponId: val,
 									})
 								}
-								fullWidth
 							/>
 						</div>
 					</div>
 					<div className="stack md items-center w-full">
 						<div className="w-full">
-							<Tabs className="analyzer__sub-nav" compact>
-								<Tab
-									active={focused === 1}
-									onClick={() => handleChange({ newFocused: 1 })}
-									testId="build1-tab"
-								>
-									{t("analyzer:build1")}
-								</Tab>
-								<Tab
-									active={focused === 2}
-									onClick={() => handleChange({ newFocused: 2 })}
-									testId="build2-tab"
-								>
-									{t("analyzer:build2")}
-								</Tab>
-								<Tab
-									active={focused === 3}
-									onClick={() => handleChange({ newFocused: 3 })}
-									testId="ap-tab"
-								>
-									{t("analyzer:compare")}
-								</Tab>
-							</Tabs>
-							{focusedBuild ? (
-								<AbilitiesSelector
-									selectedAbilities={focusedBuild}
-									onChange={(newBuild) => {
-										const firstBuildIsEmpty = build
-											.flat()
-											.every((ability) => ability === "UNKNOWN");
+							<SendouTabs
+								selectedKey={`build-${focused === 3 ? "compare" : focused}`}
+								onSelectionChange={(id) => {
+									if (id === "build-1") {
+										handleChange({ newFocused: 1 });
+									} else if (id === "build-2") {
+										handleChange({ newFocused: 2 });
+									} else {
+										handleChange({ newFocused: 3 });
+									}
+								}}
+								className="analyzer__sub-nav"
+							>
+								<SendouTabList>
+									<SendouTab id="build-1" data-testid="build1-tab">
+										{t("analyzer:build1")}
+									</SendouTab>
+									<SendouTab id="build-2" data-testid="build2-tab">
+										{t("analyzer:build2")}
+									</SendouTab>
+									<SendouTab id="build-compare" data-testid="ap-tab">
+										{t("analyzer:compare")}
+									</SendouTab>
+								</SendouTabList>
+								{[1, 2].map(
+									(buildIndex) =>
+										focusedBuild && (
+											<SendouTabPanel
+												id={`build-${buildIndex}`}
+												key={`build-${buildIndex}`}
+											>
+												<AbilitiesSelector
+													selectedAbilities={focusedBuild}
+													onChange={(newBuild) => {
+														const firstBuildIsEmpty = build
+															.flat()
+															.every((ability) => ability === "UNKNOWN");
 
-										const buildWasEmptied =
-											!firstBuildIsEmpty &&
-											newBuild
-												.flat()
-												.every((ability) => ability === "UNKNOWN") &&
-											focused === 1;
+														const buildWasEmptied =
+															!firstBuildIsEmpty &&
+															newBuild
+																.flat()
+																.every((ability) => ability === "UNKNOWN") &&
+															focused === 1;
 
-										// if we don't do this the
-										// build2 would be duplicated
-										if (buildWasEmptied) {
-											handleChange({
-												newBuild: build2,
-												newBuild2: newBuild,
-												newFocused: 1,
-											});
-											return;
-										}
+														// if we don't do this the
+														// build2 would be duplicated
+														if (buildWasEmptied) {
+															handleChange({
+																newBuild: build2,
+																newBuild2: newBuild,
+																newFocused: 1,
+															});
+															return;
+														}
 
-										handleChange({
-											[focused === 1 || firstBuildIsEmpty
-												? "newBuild"
-												: "newBuild2"]: newBuild,
-											newFocused: firstBuildIsEmpty ? 1 : undefined,
-										});
-									}}
-								/>
-							) : (
-								<APCompare
-									abilityPoints={abilityPoints}
-									abilityPoints2={abilityPoints2}
-									build={build}
-									build2={build2}
-								/>
-							)}
+														handleChange({
+															[focused === 1 || firstBuildIsEmpty
+																? "newBuild"
+																: "newBuild2"]: newBuild,
+															newFocused: firstBuildIsEmpty ? 1 : undefined,
+														});
+													}}
+												/>
+											</SendouTabPanel>
+										),
+								)}
+								<SendouTabPanel id="build-compare">
+									<APCompare
+										abilityPoints={abilityPoints}
+										abilityPoints2={abilityPoints2}
+										build={build}
+										build2={build2}
+									/>
+								</SendouTabPanel>
+							</SendouTabs>
 						</div>
 						<EffectsSelector
 							build={build}
@@ -1022,7 +1041,7 @@ function StatChart({
 
 	// prevent crash but this should not happen
 	if (chartOptions.length === 0) {
-		console.error("no chart options");
+		logger.error("no chart options");
 		return null;
 	}
 
@@ -1117,7 +1136,7 @@ function subDefenseGraphOptions({
 		}),
 	);
 
-	const distanceKeys = removeDuplicates(
+	const distanceKeys = R.unique(
 		analyzedBuilds[0].stats.subWeaponDefenseDamages
 			.filter((d) => (d as SubWeaponDamage).subWeaponId === subWeaponId)
 			.filter((d) => d.value < 100)
@@ -1574,106 +1593,99 @@ function DamageTable({
 	};
 
 	return (
-		<>
-			<Table>
-				<thead>
-					<tr>
-						<th>{t("analyzer:damage.header.type")}</th>
-						{showDistanceColumn && (
-							<th>{t("analyzer:damage.header.distance")}</th>
-						)}
-						{damageIsSubWeaponDamage(firstRow) ? (
-							<th>
-								{comparisonValues
-									? t("analyzer:damage.header.baseDamage.short")
-									: t("analyzer:damage.header.baseDamage")}
-							</th>
-						) : null}
-						{showDamageColumn && <th>{t("analyzer:damage.header.damage")}</th>}
-						{showPopovers ? <th /> : null}
-					</tr>
-				</thead>
-				<tbody>
-					{values.map((val, i) => {
-						if (val.type.includes("SECONDARY")) return null;
+		<Table>
+			<thead>
+				<tr>
+					<th>{t("analyzer:damage.header.type")}</th>
+					{showDistanceColumn && (
+						<th>{t("analyzer:damage.header.distance")}</th>
+					)}
+					{damageIsSubWeaponDamage(firstRow) ? (
+						<th>
+							{comparisonValues
+								? t("analyzer:damage.header.baseDamage.short")
+								: t("analyzer:damage.header.baseDamage")}
+						</th>
+					) : null}
+					{showDamageColumn && <th>{t("analyzer:damage.header.damage")}</th>}
+					{showPopovers ? <th /> : null}
+				</tr>
+			</thead>
+			<tbody>
+				{values.map((val, i) => {
+					if (val.type.includes("SECONDARY")) return null;
 
-						const damage = (val: AnalyzedBuild["stats"]["damages"][number]) =>
-							multiShots && damageTypeToWeaponType[val.type] === "MAIN"
-								? multiShotValues(val).join(" + ")
-								: val.value;
+					const damage = (val: AnalyzedBuild["stats"]["damages"][number]) =>
+						multiShots && damageTypeToWeaponType[val.type] === "MAIN"
+							? multiShotValues(val).join(" + ")
+							: val.value;
 
-						const typeRowName = damageIsSubWeaponDamage(val)
-							? (`weapons:SUB_${val.subWeaponId}` as const)
-							: damageTypeTranslationString({
-									damageType: val.type,
-								});
+					const typeRowName = damageIsSubWeaponDamage(val)
+						? `weapons:SUB_${val.subWeaponId}`
+						: `analyzer:damage.${val.type}`;
 
-						const comparisonVal = comparisonValues?.[i];
+					const comparisonVal = comparisonValues?.[i];
 
-						return (
-							<tr key={val.id}>
-								<td className="stack horizontal xs items-center">
-									{damageIsSubWeaponDamage(val) ? (
-										<Image
-											alt=""
-											path={subWeaponImageUrl(val.subWeaponId)}
-											width={12}
-											height={12}
+					return (
+						<tr key={val.id}>
+							<td className="stack horizontal xs items-center">
+								{damageIsSubWeaponDamage(val) ? (
+									<Image
+										alt=""
+										path={subWeaponImageUrl(val.subWeaponId)}
+										width={12}
+										height={12}
+									/>
+								) : null}{" "}
+								{t(typeRowName as any)}{" "}
+								{damageIsSubWeaponDamage(val) && val.type === "SPLASH" ? (
+									<>({t("analyzer:damage.SPLASH")})</>
+								) : null}
+							</td>
+							{showDistanceColumn && (
+								<td>
+									{typeof val.distance === "number"
+										? val.distance
+										: val.distance?.join("-")}
+								</td>
+							)}
+							{damageIsSubWeaponDamage(val) && <td>{val.baseValue}</td>}
+							{showDamageColumn && (
+								<td>
+									{damage(val)}
+									{comparisonVal ? `/${damage(comparisonVal)}` : null}{" "}
+									{val.shotsToSplat && (
+										<span className="analyzer__shots-to-splat">
+											{t("analyzer:damage.toSplat", {
+												count: val.shotsToSplat,
+											})}
+										</span>
+									)}
+								</td>
+							)}
+							{showPopovers ? (
+								<td>
+									{renderPopover(val, (val as SubWeaponDamage).subWeaponId) ? (
+										<StatChartPopover
+											mainWeaponId={0}
+											modifiedBy={[]}
+											subWeaponId={(val as SubWeaponDamage).subWeaponId}
+											title={t(
+												`weapons:SUB_${(val as SubWeaponDamage).subWeaponId}`,
+											)}
+											simple
+											valueSuffix={` ${t(
+												"analyzer:damageShort",
+											).toLowerCase()}`}
 										/>
-									) : null}{" "}
-									{t(typeRowName as any)}{" "}
-									{damageIsSubWeaponDamage(val) && val.type === "SPLASH" ? (
-										<>({t("analyzer:damage.SPLASH")})</>
 									) : null}
 								</td>
-								{showDistanceColumn && (
-									<td>
-										{typeof val.distance === "number"
-											? val.distance
-											: val.distance?.join("-")}
-									</td>
-								)}
-								{damageIsSubWeaponDamage(val) && <td>{val.baseValue}</td>}
-								{showDamageColumn && (
-									<td>
-										{damage(val)}
-										{comparisonVal ? `/${damage(comparisonVal)}` : null}{" "}
-										{val.shotsToSplat && (
-											<span className="analyzer__shots-to-splat">
-												{t("analyzer:damage.toSplat", {
-													count: val.shotsToSplat,
-												})}
-											</span>
-										)}
-									</td>
-								)}
-								{showPopovers ? (
-									<td>
-										{renderPopover(
-											val,
-											(val as SubWeaponDamage).subWeaponId,
-										) ? (
-											<StatChartPopover
-												mainWeaponId={0}
-												modifiedBy={[]}
-												subWeaponId={(val as SubWeaponDamage).subWeaponId}
-												title={t(
-													`weapons:SUB_${(val as SubWeaponDamage).subWeaponId}`,
-												)}
-												simple
-												valueSuffix={` ${t(
-													"analyzer:damageShort",
-												).toLowerCase()}`}
-											/>
-										) : null}
-									</td>
-								) : null}
-							</tr>
-						);
-					})}
-				</tbody>
-			</Table>
-		</>
+							) : null}
+						</tr>
+					);
+				})}
+			</tbody>
+		</Table>
 	);
 }
 

@@ -1,29 +1,31 @@
-import { cachified } from "@epic-web/cachified";
-import type { LoaderFunctionArgs, SerializeFrom } from "@remix-run/node";
+import type { MetaFunction, SerializeFrom } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { Ability } from "~/components/Ability";
 import { Main } from "~/components/Main";
-import { ONE_HOUR_IN_MS } from "~/constants";
-import { i18next } from "~/modules/i18n/i18next.server";
-import { cache, ttl } from "~/utils/cache.server";
-import {
-	type SendouRouteHandle,
-	notFoundIfNullLike,
-} from "~/utils/remix.server";
-import { weaponNameSlugToId } from "~/utils/unslugify.server";
+import type { SendouRouteHandle } from "~/utils/remix.server";
 import {
 	BUILDS_PAGE,
 	navIconUrl,
 	outlinedMainWeaponImageUrl,
 	weaponBuildPage,
 } from "~/utils/urls";
-import { popularBuilds } from "../build-stats-utils";
-import { abilitiesByWeaponId } from "../queries/abilitiesByWeaponId.server";
+import { metaTags } from "../../../utils/remix";
 
-import { meta } from "../../builds/routes/builds.$slug";
-export { meta };
+import { loader } from "../loaders/builds.$slug.popular.server";
+export { loader };
+
+export const meta: MetaFunction<typeof loader> = (args) => {
+	if (!args.data) return [];
+
+	return metaTags({
+		title: `${args.data.weaponName} popular builds`,
+		ogTitle: `${args.data.weaponName} Splatoon 3 popular builds`,
+		description: `List of most popular ability combinations for ${args.data.weaponName}.`,
+		location: args.location,
+	});
+};
 
 export const handle: SendouRouteHandle = {
 	i18n: ["analyzer", "builds"],
@@ -50,30 +52,6 @@ export const handle: SendouRouteHandle = {
 			},
 		];
 	},
-};
-
-export const loader = async ({ params, request }: LoaderFunctionArgs) => {
-	const t = await i18next.getFixedT(request, ["builds"]);
-	const slug = params.slug;
-	const weaponId = notFoundIfNullLike(weaponNameSlugToId(slug));
-
-	const cachedPopularBuilds = await cachified({
-		key: `popular-builds-${weaponId}`,
-		cache,
-		ttl: ttl(ONE_HOUR_IN_MS),
-		async getFreshValue() {
-			return popularBuilds(abilitiesByWeaponId(weaponId));
-		},
-	});
-
-	return {
-		popularBuilds: cachedPopularBuilds,
-		meta: {
-			weaponId,
-			slug: slug!,
-			breadcrumbText: t("builds:linkButton.popularBuilds"),
-		},
-	};
 };
 
 export default function PopularBuildsPage() {

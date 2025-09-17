@@ -1,6 +1,6 @@
 import { sql } from "~/db/sql";
-import type { MapResult } from "~/db/types";
-import type { ModeShort, StageId } from "~/modules/in-game-lists";
+import type { Tables } from "~/db/tables";
+import type { ModeShort, StageId } from "~/modules/in-game-lists/types";
 
 const stm = sql.prepare(/* sql */ `
   select
@@ -19,7 +19,7 @@ export function seasonStagesByUserId({
 	userId: number;
 	season: number;
 }) {
-	const rows = stm.all({ userId, season }) as Array<MapResult>;
+	const rows = stm.all({ userId, season }) as Array<Tables["MapResult"]>;
 
 	return rows.reduce(
 		(acc, cur) => {

@@ -1,94 +1,26 @@
-import {
-	type ActionFunction,
-	type LoaderFunctionArgs,
-	redirect,
-} from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "~/components/Button";
-import { WeaponCombobox } from "~/components/Combobox";
+import { SendouButton } from "~/components/elements/Button";
 import { FormMessage } from "~/components/FormMessage";
 import { WeaponImage } from "~/components/Image";
+import { TrashIcon } from "~/components/icons/Trash";
 import { Label } from "~/components/Label";
 import { RequiredHiddenInput } from "~/components/RequiredHiddenInput";
 import { SubmitButton } from "~/components/SubmitButton";
-import { TrashIcon } from "~/components/icons/Trash";
+import { WeaponSelect } from "~/components/WeaponSelect";
 import { useUser } from "~/features/auth/core/user";
-import { requireUser } from "~/features/auth/core/user.server";
-import { tournamentIdFromParams } from "~/features/tournament";
-import {
-	clearTournamentDataCache,
-	tournamentFromDB,
-} from "~/features/tournament-bracket/core/Tournament.server";
-import type { MainWeaponId } from "~/modules/in-game-lists";
-import {
-	type SendouRouteHandle,
-	errorToastIfFalsy,
-	parseRequestPayload,
-} from "~/utils/remix.server";
-import { tournamentSubsPage } from "~/utils/urls";
-import { findSubsByTournamentId } from "../queries/findSubsByTournamentId.server";
-import { upsertSub } from "../queries/upsertSub.server";
+import type { MainWeaponId } from "~/modules/in-game-lists/types";
+import type { SendouRouteHandle } from "~/utils/remix.server";
+import { action } from "../actions/to.$id.subs.new.server";
+import { loader } from "../loaders/to.$id.subs.new.server";
 import { TOURNAMENT_SUB } from "../tournament-subs-constants";
-import { subSchema } from "../tournament-subs-schemas.server";
+export { action, loader };
 
 import "../tournament-subs.css";
 
 export const handle: SendouRouteHandle = {
 	i18n: ["user"],
-};
-
-export const action: ActionFunction = async ({ params, request }) => {
-	const user = await requireUser(request);
-	const data = await parseRequestPayload({
-		request,
-		schema: subSchema,
-	});
-	const tournamentId = tournamentIdFromParams(params);
-	const tournament = await tournamentFromDB({ tournamentId, user });
-
-	errorToastIfFalsy(!tournament.everyBracketOver, "Tournament is over");
-	errorToastIfFalsy(
-		tournament.canAddNewSubPost,
-		"Registration is closed or subs feature disabled",
-	);
-	errorToastIfFalsy(
-		!tournament.teamMemberOfByUser(user),
-		"Can't register as a sub and be in a team at the same time",
-	);
-
-	upsertSub({
-		bestWeapons: data.bestWeapons.join(","),
-		okWeapons: data.okWeapons.join(","),
-		canVc: data.canVc,
-		visibility: data.visibility,
-		message: data.message ?? null,
-		tournamentId,
-		userId: user.id,
-	});
-
-	clearTournamentDataCache(tournamentId);
-
-	throw redirect(tournamentSubsPage(tournamentId));
-};
-
-export const loader = async ({ request, params }: LoaderFunctionArgs) => {
-	const user = await requireUser(request);
-	const tournamentId = tournamentIdFromParams(params);
-	const tournament = await tournamentFromDB({ tournamentId, user });
-
-	if (!tournament.canAddNewSubPost) {
-		throw redirect(tournamentSubsPage(tournamentId));
-	}
-
-	const sub = findSubsByTournamentId({ tournamentId }).find(
-		(sub) => sub.userId === user.id,
-	);
-
-	return {
-		sub,
-	};
 };
 
 export default function NewTournamentSubPage() {
@@ -290,32 +222,24 @@ function WeaponPoolSelect({
 				name={id}
 				value={JSON.stringify(weapons)}
 			/>
-			<div>
-				<Label htmlFor={id} required={required}>
-					{label}
-				</Label>
-				{weapons.length < TOURNAMENT_SUB.WEAPON_POOL_MAX_SIZE ? (
-					<>
-						<WeaponCombobox
-							inputName={id}
-							id={id}
-							onChange={(weapon) => {
-								if (!weapon) return;
-								setWeapons([...weapons, Number(weapon.value) as MainWeaponId]);
-							}}
-							// empty on selection
-							key={weapons[weapons.length - 1]}
-							weaponIdsToOmit={new Set([...weapons, ...otherWeapons])}
-							fullWidth
-						/>
-						<FormMessage type="info">{infoText}</FormMessage>
-					</>
-				) : (
-					<span className="text-xs text-warning">
-						{t("user:forms.errors.maxWeapons")}
-					</span>
-				)}
-			</div>
+			{weapons.length < TOURNAMENT_SUB.WEAPON_POOL_MAX_SIZE ? (
+				<>
+					<WeaponSelect
+						label={label}
+						onChange={(weaponId) => {
+							setWeapons([...weapons, weaponId]);
+						}}
+						disabledWeaponIds={[...weapons, ...otherWeapons]}
+						// empty on selection
+						key={weapons[weapons.length - 1]}
+					/>
+					<FormMessage type="info">{infoText}</FormMessage>
+				</>
+			) : (
+				<span className="text-xs text-warning">
+					{t("user:forms.errors.maxWeapons")}
+				</span>
+			)}
 			{weapons.length > 0 ? (
 				<div className="stack horizontal sm justify-center">
 					{weapons.map((weapon) => {
@@ -329,11 +253,11 @@ function WeaponPoolSelect({
 										height={38}
 									/>
 								</div>
-								<Button
+								<SendouButton
 									icon={<TrashIcon />}
 									variant="minimal-destructive"
 									aria-label="Delete weapon"
-									onClick={() =>
+									onPress={() =>
 										setWeapons(weapons.filter((w) => w !== weapon))
 									}
 								/>

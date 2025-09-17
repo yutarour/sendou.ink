@@ -1,10 +1,11 @@
 import { sql } from "kysely";
 import { jsonArrayFrom, jsonObjectFrom } from "kysely/helpers/sqlite";
 import { db } from "~/db/sql";
-import type { Tables } from "~/db/tables";
-import { dateToDatabaseTimestamp } from "~/utils/dates";
+import type { Tables, TablesInsertable } from "~/db/tables";
+import { databaseTimestampNow, dateToDatabaseTimestamp } from "~/utils/dates";
 import { COMMON_USER_FIELDS } from "~/utils/kysely.server";
-import { mySlugify, userSubmittedImage } from "~/utils/urls";
+import { mySlugify } from "~/utils/urls";
+import { userSubmittedImage } from "~/utils/urls-img";
 import { HACKY_resolvePicture } from "../tournament/tournament-utils";
 import { TOURNAMENT_SERIES_EVENTS_PER_PAGE } from "./tournament-organization-constants";
 
@@ -35,8 +36,8 @@ export function create(args: CreateArgs) {
 	});
 }
 
-export function findBySlug(slug: string) {
-	return db
+export async function findBySlug(slug: string) {
+	const organization = await db
 		.selectFrom("TournamentOrganization")
 		.leftJoin(
 			"UserSubmittedImage",
@@ -95,6 +96,20 @@ export function findBySlug(slug: string) {
 		])
 		.where("TournamentOrganization.slug", "=", slug)
 		.executeTakeFirst();
+
+	if (!organization) return null;
+
+	const orgAdminUserIds = organization.members
+		.filter((member) => member.role === "ADMIN")
+		.map((member) => member.id);
+
+	return {
+		...organization,
+		permissions: {
+			EDIT: orgAdminUserIds,
+			BAN: orgAdminUserIds,
+		},
+	};
 }
 
 export function findByOrganizerUserId(userId: number) {
@@ -114,7 +129,7 @@ export function findByOrganizerUserId(userId: number) {
 				"ORGANIZER",
 			),
 		)
-		.orderBy("TournamentOrganization.id asc")
+		.orderBy("TournamentOrganization.id", "asc")
 		.execute();
 }
 
@@ -170,7 +185,7 @@ const findEventsBaseQuery = (organizationId: number) =>
 									"=",
 									"TournamentTeam.id",
 								)
-								.orderBy("User.id asc"),
+								.orderBy("User.id", "asc"),
 						).as("members"),
 					])
 					.whereRef(
@@ -200,7 +215,7 @@ const findEventsBaseQuery = (organizationId: number) =>
 									"=",
 									"CalendarEventResultTeam.id",
 								)
-								.orderBy("User.id asc"),
+								.orderBy("User.id", "asc"),
 						).as("members"),
 					])
 					.whereRef("CalendarEventResultTeam.eventId", "=", "CalendarEvent.id")
@@ -208,6 +223,7 @@ const findEventsBaseQuery = (organizationId: number) =>
 			).as("eventWinners"),
 		])
 		.where("CalendarEvent.organizationId", "=", organizationId)
+		.where("CalendarEvent.hidden", "=", 0)
 		.groupBy("CalendarEvent.id");
 
 const mapEvent = <
@@ -252,10 +268,20 @@ export async function findEventsByMonth({
 			"<=",
 			dateToDatabaseTimestamp(lastDayOfTheMonth),
 		)
-		.orderBy("CalendarEventDate.startTime asc")
+		.orderBy("CalendarEventDate.startTime", "asc")
 		.execute();
 
 	return events.map(mapEvent);
+}
+
+export function findAllUnfinalizedEvents(organizationId: number) {
+	return db
+		.selectFrom("Tournament")
+		.innerJoin("CalendarEvent", "CalendarEvent.tournamentId", "Tournament.id")
+		.select(["Tournament.id"])
+		.where("Tournament.isFinalized", "=", 0)
+		.where("CalendarEvent.organizationId", "=", organizationId)
+		.execute();
 }
 
 const findSeriesEventsBaseQuery = ({
@@ -273,7 +299,7 @@ const findSeriesEventsBaseQuery = ({
 				),
 			),
 		)
-		.orderBy("CalendarEventDate.startTime desc");
+		.orderBy("CalendarEventDate.startTime", "desc");
 
 export async function findPaginatedEventsBySeries({
 	organizationId,
@@ -405,4 +431,74 @@ export function update({
 
 		return updatedOrg;
 	});
+}
+
+/**
+ * Inserts a user to the banned list for a tournament organization or updates the existing entry if already exists.
+ */
+export function upsertBannedUser(
+	args: Omit<TablesInsertable["TournamentOrganizationBannedUser"], "updatedAt">,
+) {
+	return db
+		.insertInto("TournamentOrganizationBannedUser")
+		.values({ ...args, updatedAt: databaseTimestampNow() })
+		.execute();
+}
+
+/**
+ * Removes a user from the banned list for a tournament organization
+ */
+export function unbanUser({
+	organizationId,
+	userId,
+}: {
+	organizationId: number;
+	userId: number;
+}) {
+	return db
+		.deleteFrom("TournamentOrganizationBannedUser")
+		.where("organizationId", "=", organizationId)
+		.where("userId", "=", userId)
+		.execute();
+}
+
+/**
+ * Returns all banned users for a specific tournament organization
+ */
+export function allBannedUsersByOrganizationId(organizationId: number) {
+	return db
+		.selectFrom("TournamentOrganizationBannedUser")
+		.innerJoin("User", "User.id", "TournamentOrganizationBannedUser.userId")
+		.select([
+			"TournamentOrganizationBannedUser.privateNote",
+			"TournamentOrganizationBannedUser.updatedAt",
+			...COMMON_USER_FIELDS,
+		])
+		.where(
+			"TournamentOrganizationBannedUser.organizationId",
+			"=",
+			organizationId,
+		)
+		.orderBy("TournamentOrganizationBannedUser.updatedAt", "desc")
+		.execute();
+}
+
+/**
+ * Checks if a user is banned by a specific organization
+ */
+export async function isUserBannedByOrganization({
+	organizationId,
+	userId,
+}: {
+	organizationId: number;
+	userId: number;
+}) {
+	const result = await db
+		.selectFrom("TournamentOrganizationBannedUser")
+		.select("userId")
+		.where("organizationId", "=", organizationId)
+		.where("userId", "=", userId)
+		.executeTakeFirst();
+
+	return Boolean(result);
 }

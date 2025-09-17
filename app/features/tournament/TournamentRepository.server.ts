@@ -1,6 +1,5 @@
-import { type Insertable, type NotNull, type Transaction, sql } from "kysely";
+import { type Insertable, type NotNull, sql, type Transaction } from "kysely";
 import { jsonArrayFrom, jsonObjectFrom } from "kysely/helpers/sqlite";
-import { nanoid } from "nanoid";
 import { db } from "~/db/sql";
 import type {
 	CastedMatchesInfo,
@@ -11,12 +10,13 @@ import type {
 } from "~/db/tables";
 import * as Progression from "~/features/tournament-bracket/core/Progression";
 import { Status } from "~/modules/brackets-model";
-import { modesShort } from "~/modules/in-game-lists";
+import { modesShort } from "~/modules/in-game-lists/modes";
 import { nullFilledArray, nullifyingAvg } from "~/utils/arrays";
 import { databaseTimestampNow, dateToDatabaseTimestamp } from "~/utils/dates";
+import { shortNanoid } from "~/utils/id";
 import { COMMON_USER_FIELDS, userChatNameColor } from "~/utils/kysely.server";
 import type { Unwrapped } from "~/utils/types";
-import { userSubmittedImage } from "~/utils/urls";
+import { userSubmittedImage } from "~/utils/urls-img";
 import { HACKY_resolvePicture } from "./tournament-utils";
 
 export type FindById = NonNullable<Unwrapped<typeof findById>>;
@@ -36,7 +36,7 @@ export async function findById(id: number) {
 			"CalendarEvent.id",
 			"CalendarEventDate.eventId",
 		)
-		.select(({ eb, exists, selectFrom }) => [
+		.select(({ eb }) => [
 			"Tournament.id",
 			"CalendarEvent.id as eventId",
 			"CalendarEvent.discordUrl",
@@ -50,6 +50,7 @@ export async function findById(id: number) {
 			"CalendarEvent.name",
 			"CalendarEvent.description",
 			"CalendarEventDate.startTime",
+			"Tournament.isFinalized",
 			jsonObjectFrom(
 				eb
 					.selectFrom("TournamentOrganization")
@@ -149,11 +150,6 @@ export async function findById(id: number) {
 						"Tournament.id",
 					),
 			).as("bracketProgressionOverrides"),
-			exists(
-				selectFrom("TournamentResult")
-					.where("TournamentResult.tournamentId", "=", id)
-					.select("TournamentResult.tournamentId"),
-			).as("isFinalized"),
 			jsonArrayFrom(
 				eb
 					.selectFrom("TournamentTeam")
@@ -208,7 +204,7 @@ export async function findById(id: number) {
 									"=",
 									"TournamentTeam.id",
 								)
-								.orderBy("TournamentTeamMember.createdAt asc"),
+								.orderBy("TournamentTeamMember.createdAt", "asc"),
 						).as("members"),
 						jsonArrayFrom(
 							innerEb
@@ -252,7 +248,8 @@ export async function findById(id: number) {
 						).as("team"),
 					])
 					.where("TournamentTeam.tournamentId", "=", id)
-					.orderBy(["TournamentTeam.seed asc", "TournamentTeam.createdAt asc"]),
+					.orderBy("TournamentTeam.seed", "asc")
+					.orderBy("TournamentTeam.createdAt", "asc"),
 			).as("teams"),
 			jsonArrayFrom(
 				eb
@@ -451,8 +448,10 @@ export function forShowcase() {
 		.select((eb) => [
 			"Tournament.id",
 			"Tournament.settings",
+			"CalendarEvent.authorId",
 			"CalendarEvent.name",
 			"CalendarEventDate.startTime",
+			"CalendarEvent.hidden",
 			eb
 				.selectFrom("TournamentTeam")
 				.leftJoin("TournamentTeamCheckIn", (join) =>
@@ -523,7 +522,7 @@ export function forShowcase() {
 			).as("firstPlacers"),
 		])
 		.where("CalendarEventDate.startTime", ">", databaseTimestampWeekAgo())
-		.orderBy("CalendarEventDate.startTime asc")
+		.orderBy("CalendarEventDate.startTime", "asc")
 		.$narrowType<{ teamsCount: NotNull }>()
 		.execute();
 }
@@ -534,6 +533,36 @@ function databaseTimestampWeekAgo() {
 	now.setDate(now.getDate() - 7);
 
 	return dateToDatabaseTimestamp(now);
+}
+
+export function findAllBetweenTwoTimestamps({
+	startTime,
+	endTime,
+}: {
+	startTime: Date;
+	endTime: Date;
+}) {
+	return db
+		.selectFrom("CalendarEvent")
+		.innerJoin(
+			"CalendarEventDate",
+			"CalendarEvent.id",
+			"CalendarEventDate.eventId",
+		)
+		.innerJoin("Tournament", "CalendarEvent.tournamentId", "Tournament.id")
+		.select(["Tournament.id as tournamentId"])
+		.where(
+			"CalendarEventDate.startTime",
+			">=",
+			dateToDatabaseTimestamp(startTime),
+		)
+		.where(
+			"CalendarEventDate.startTime",
+			"<=",
+			dateToDatabaseTimestamp(endTime),
+		)
+		.where("CalendarEvent.hidden", "=", 0)
+		.execute();
 }
 
 export function topThreeResultsByTournamentId(tournamentId: number) {
@@ -603,7 +632,7 @@ export async function friendCodesByTournamentId(tournamentId: number) {
 			"UserFriendCode.userId",
 		)
 		.select(["TournamentTeamMember.userId", "UserFriendCode.friendCode"])
-		.orderBy("UserFriendCode.createdAt asc")
+		.orderBy("UserFriendCode.createdAt", "asc")
 		.where("TournamentTeam.tournamentId", "=", tournamentId)
 		.execute();
 
@@ -1030,7 +1059,7 @@ export function pickBanEventsByMatchId(matchId: number) {
 			"TournamentMatchPickBanEvent.number",
 		])
 		.where("matchId", "=", matchId)
-		.orderBy("TournamentMatchPickBanEvent.number asc")
+		.orderBy("TournamentMatchPickBanEvent.number", "asc")
 		.execute();
 }
 
@@ -1066,7 +1095,7 @@ export function resetBracket(tournamentStageId: number) {
 
 export type TournamentRepositoryInsertableMatch = Omit<
 	Insertable<DB["TournamentMatch"]>,
-	"status" | "bestOf" | "chatCode"
+	"status" | "chatCode"
 >;
 
 export function insertSwissMatches(
@@ -1088,7 +1117,7 @@ export function insertSwissMatches(
 				stageId: match.stageId,
 				status: Status.Ready,
 				createdAt: dateToDatabaseTimestamp(new Date()),
-				chatCode: nanoid(10),
+				chatCode: shortNanoid(),
 			})),
 		)
 		.execute();

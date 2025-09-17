@@ -1,10 +1,15 @@
+import type { Tables } from "~/db/tables";
+import { isAdmin } from "~/modules/permissions/utils";
+import { allTruthy } from "~/utils/arrays";
+import { databaseTimestampToDate } from "~/utils/dates";
 import { logger } from "~/utils/logger";
 import { assertUnreachable } from "~/utils/types";
-import { userDiscordIdIsAged } from "~/utils/users";
-import type { RegClosesAtOption } from "./calendar-constants";
-
-export const canAddNewEvent = (user: { discordId: string }) =>
-	userDiscordIdIsAged(user);
+import type { DayMonthYear } from "~/utils/zod";
+import {
+	DAYS_SHOWN_AT_A_TIME,
+	type RegClosesAtOption,
+} from "./calendar-constants";
+import type { CalendarEvent } from "./calendar-types";
 
 export const calendarEventMinDate = () => new Date(Date.UTC(2015, 4, 28));
 export const calendarEventMaxDate = () => {
@@ -143,4 +148,120 @@ export function closeByWeeks(args: { week: number; year: number }) {
 			year,
 		};
 	});
+}
+
+interface CanEditCalendarEventArgs {
+	user?: Pick<Tables["User"], "id">;
+	event: Pick<Tables["CalendarEvent"], "authorId">;
+}
+export function canEditCalendarEvent({
+	user,
+	event,
+}: CanEditCalendarEventArgs) {
+	if (isAdmin(user)) return true;
+
+	return user?.id === event.authorId;
+}
+
+export function canDeleteCalendarEvent({
+	user,
+	event,
+	startTime,
+}: CanEditCalendarEventArgs & { startTime: Date }) {
+	if (isAdmin(user)) return true;
+
+	return user?.id === event.authorId && startTime > new Date();
+}
+
+interface CanReportCalendarEventWinnersArgs {
+	user?: Pick<Tables["User"], "id">;
+	event: Pick<Tables["CalendarEvent"], "authorId">;
+	startTimes: number[];
+}
+export function canReportCalendarEventWinners({
+	user,
+	event,
+	startTimes,
+}: CanReportCalendarEventWinnersArgs) {
+	return allTruthy([
+		canEditCalendarEvent({ user, event }),
+		eventStartedInThePast(startTimes),
+	]);
+}
+
+function eventStartedInThePast(
+	startTimes: CanReportCalendarEventWinnersArgs["startTimes"],
+) {
+	return startTimes.every(
+		(startTime) => databaseTimestampToDate(startTime).getTime() < Date.now(),
+	);
+}
+
+export function daysForCalendar(currentDate?: DayMonthYear) {
+	type DaysArray = Array<DayMonthYear>;
+
+	const previous: DaysArray = [];
+	const shown: DaysArray = [];
+	const next: DaysArray = [];
+
+	const startDate = () =>
+		currentDate
+			? new Date(currentDate.year, currentDate.month, currentDate.day)
+			: new Date();
+
+	const currentDayMonthYear = () => {
+		const now = startDate();
+
+		return {
+			day: now.getDate(),
+			month: now.getMonth(),
+			year: now.getFullYear(),
+		};
+	};
+
+	let now = startDate();
+
+	for (let i = 0; i < DAYS_SHOWN_AT_A_TIME; i++) {
+		shown.push({
+			day: now.getDate(),
+			month: now.getMonth(),
+			year: now.getFullYear(),
+		});
+
+		now.setDate(now.getDate() + 1);
+	}
+
+	for (let i = 0; i < DAYS_SHOWN_AT_A_TIME; i++) {
+		next.push({
+			day: now.getDate(),
+			month: now.getMonth(),
+			year: now.getFullYear(),
+		});
+
+		now.setDate(now.getDate() + 1);
+	}
+
+	now = startDate();
+
+	for (let i = 0; i < DAYS_SHOWN_AT_A_TIME; i++) {
+		now.setDate(now.getDate() - 1);
+
+		previous.push({
+			day: now.getDate(),
+			month: now.getMonth(),
+			year: now.getFullYear(),
+		});
+	}
+	previous.reverse();
+
+	return {
+		previous,
+		shown,
+		next,
+		current: currentDayMonthYear(),
+	};
+}
+
+export function calendarEventSorter(a: CalendarEvent, b: CalendarEvent) {
+	return b.normalizedTeamCount - a.normalizedTeamCount;
 }

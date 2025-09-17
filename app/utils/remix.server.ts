@@ -1,13 +1,15 @@
-import { json, redirect } from "@remix-run/node";
 import {
 	unstable_composeUploadHandlers as composeUploadHandlers,
 	unstable_createMemoryUploadHandler as createMemoryUploadHandler,
+	json,
 	unstable_parseMultipartFormData as parseMultipartFormData,
+	redirect,
 } from "@remix-run/node";
 import type { Params, UIMatch } from "@remix-run/react";
 import type { Namespace, TFunction } from "i18next";
 import { nanoid } from "nanoid";
-import type { z } from "zod";
+import type { Ok, Result } from "neverthrow";
+import type { z } from "zod/v4";
 import type { navItems } from "~/components/layout/nav-items";
 import { s3UploadHandler } from "~/features/img-upload";
 import invariant from "./invariant";
@@ -55,7 +57,7 @@ export function parseSearchParams<T extends z.ZodTypeAny>({
 	} catch (e) {
 		logger.error("Error parsing search params", e);
 
-		throw errorToast("Validation failed");
+		throw errorToastRedirect("Validation failed");
 	}
 }
 
@@ -65,7 +67,7 @@ export function parseSafeSearchParams<T extends z.ZodTypeAny>({
 }: {
 	request: Request;
 	schema: T;
-}): z.SafeParseReturnType<any, z.infer<T>> {
+}) {
 	const url = new URL(request.url);
 	return schema.safeParse(Object.fromEntries(url.searchParams));
 }
@@ -93,7 +95,7 @@ export async function parseRequestPayload<T extends z.ZodTypeAny>({
 	} catch (e) {
 		logger.error("Error parsing request payload", e);
 
-		throw errorToast("Validation failed");
+		throw errorToastRedirect("Validation failed");
 	}
 }
 
@@ -117,7 +119,7 @@ export async function parseFormData<T extends z.ZodTypeAny>({
 	} catch (e) {
 		logger.error("Error parsing form data", e);
 
-		throw errorToast("Validation failed");
+		throw errorToastRedirect("Validation failed");
 	}
 }
 
@@ -152,7 +154,9 @@ export async function safeParseRequestFormData<T extends z.ZodTypeAny>({
 	if (!parsed.success) {
 		return {
 			success: false,
-			errors: parsed.error.errors.map((error) => error.message),
+			errors: parsed.error.issues.map(
+				(issue: { message: string }) => issue.message,
+			),
 		};
 	}
 
@@ -181,9 +185,17 @@ function formDataToObject(formData: FormData) {
 	return result;
 }
 
+const LOHI_TOKEN_HEADER_NAME = "Lohi-Token";
+
+/** Some endpoints can only be accessed with an auth token. Used by Lohi bot and cron jobs. */
+export function canAccessLohiEndpoint(request: Request) {
+	invariant(process.env.LOHI_TOKEN, "LOHI_TOKEN is required");
+	return request.headers.get(LOHI_TOKEN_HEADER_NAME) === process.env.LOHI_TOKEN;
+}
+
 // TODO: investigate better solution to toasts when middlewares land (current one has a problem of clearing search params)
 
-export function errorToast(message: string) {
+export function errorToastRedirect(message: string) {
 	return redirect(`?__error=${message}`);
 }
 
@@ -194,11 +206,39 @@ export function errorToastIfFalsy(
 ): asserts condition {
 	if (condition) return;
 
-	throw errorToast(message);
+	throw errorToastRedirect(message);
+}
+
+/**
+ * To be used in loader or action function. Asserts that the provided `Result` value is an `Ok` variant of the `neverthrow` library.
+ *
+ * If the value is an `Err`, shows an error toast to the user with the error message. The function will stop execution by throwing a redirect meaning it is safe to operate on the value after this function call.
+ */
+export function errorToastIfErr<T, E extends string>(
+	value: Result<T, E>,
+): asserts value is Ok<T, never> {
+	if (value.isErr()) {
+		throw errorToastRedirect(value.error);
+	}
+}
+
+/** Throws a redirect triggering an error toast with given message.  */
+export function errorToast(message: string) {
+	throw errorToastRedirect(message);
 }
 
 export function successToast(message: string) {
 	return redirect(`?__success=${message}`);
+}
+
+export function successToastWithRedirect({
+	message,
+	url,
+}: {
+	message: string;
+	url: string;
+}) {
+	return redirect(`${url}?__success=${message}`);
 }
 
 export type ActionError = { field: string; msg: string; isError: true };

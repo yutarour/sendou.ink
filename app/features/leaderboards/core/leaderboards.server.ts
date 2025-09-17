@@ -1,13 +1,12 @@
 import { cachified } from "@epic-web/cachified";
-import { HALF_HOUR_IN_MS } from "~/constants";
+import * as Seasons from "~/features/mmr/core/Seasons";
 import { USER_LEADERBOARD_MIN_ENTRIES_FOR_LEVIATHAN } from "~/features/mmr/mmr-constants";
 import { spToOrdinal } from "~/features/mmr/mmr-utils";
-import { currentSeason } from "~/features/mmr/season";
 import { freshUserSkills, userSkills } from "~/features/mmr/tiered.server";
 import * as UserRepository from "~/features/user-page/UserRepository.server";
-import type { MainWeaponId } from "~/modules/in-game-lists";
-import { weaponCategories } from "~/modules/in-game-lists";
-import { cache, ttl } from "~/utils/cache.server";
+import type { MainWeaponId } from "~/modules/in-game-lists/types";
+import { weaponCategories } from "~/modules/in-game-lists/weapon-ids";
+import { cache, IN_MILLISECONDS, ttl } from "~/utils/cache.server";
 import type { Unwrapped } from "~/utils/types";
 import { DEFAULT_LEADERBOARD_MAX_SIZE } from "../leaderboards-constants";
 import { seasonHasTopTen } from "../leaderboards-utils";
@@ -23,13 +22,13 @@ export async function cachedFullUserLeaderboard(season: number) {
 	return cachified({
 		key: `user-leaderboard-season-${season}`,
 		cache,
-		ttl: ttl(HALF_HOUR_IN_MS),
+		ttl: ttl(IN_MILLISECONDS.HALF_HOUR),
 		async getFreshValue() {
 			const leaderboard = userSPLeaderboard(season);
 			const withTiers = addTiers(leaderboard, season);
 
 			const shouldAddPendingPlusTier =
-				season === currentSeason(new Date())?.nth &&
+				season === Seasons.current()?.nth &&
 				leaderboard.length >= USER_LEADERBOARD_MIN_ENTRIES_FOR_LEVIATHAN;
 			const withPendingPlusTiers = shouldAddPendingPlusTier
 				? addPendingPlusTiers(
@@ -69,9 +68,9 @@ function addTiers(entries: UserSPLeaderboardItem[], season: number) {
 }
 
 const PLUS_TIER_QUOTA = {
-	"+1": 10,
-	"+2": 20,
-	"+3": 30,
+	"+1": 5,
+	"+2": 10,
+	"+3": 15,
 } as const;
 export function addPendingPlusTiers<T extends UserSPLeaderboardItem>(
 	entries: T[],

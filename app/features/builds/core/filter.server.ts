@@ -1,6 +1,9 @@
 import type { Tables } from "~/db/tables";
 import { buildToAbilityPoints } from "~/features/build-analyzer";
-import type { BuildAbilitiesTuple, ModeShort } from "~/modules/in-game-lists";
+import type {
+	BuildAbilitiesTuple,
+	ModeShort,
+} from "~/modules/in-game-lists/types";
 import { databaseTimestampToDate } from "~/utils/dates";
 import { assertUnreachable } from "~/utils/types";
 import type { BuildFiltersFromSearchParams } from "../builds-schemas.server";
@@ -16,6 +19,11 @@ type PartialBuild = {
 	updatedAt: Tables["Build"]["updatedAt"];
 };
 
+/**
+ * Filters an array of builds based on the provided filter criteria and returns up to a specified count of matching builds.
+ *
+ * Filters are applied on "AND" basis, meaning all filters must match for a build to be included in the result.
+ */
 export function filterBuilds<T extends PartialBuild>({
 	filters,
 	count,

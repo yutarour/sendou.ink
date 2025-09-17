@@ -1,5 +1,6 @@
+import type { Transaction } from "kysely";
 import { db, sql } from "~/db/sql";
-import type { Tables } from "~/db/tables";
+import type { DB, Tables, TablesInsertable } from "~/db/tables";
 import { dateToDatabaseTimestamp } from "~/utils/dates";
 import invariant from "~/utils/invariant";
 import { syncXPBadges } from "../badges/queries/syncXPBadges.server";
@@ -33,8 +34,21 @@ export const cleanUp = () => {
 	cleanUpStm.run();
 };
 
+/**
+ * Migrates user-related data. Takes data from the "old user" and remaps it to the Discord ID of the "new user". Used when user switches their Discord accounts.
+ *
+ * @param args - An object containing:
+ *   - `newUserId`: The ID of the user whose data will be migrated and then deleted.
+ *   - `oldUserId`: The ID of the user who will receive the migrated data.
+ * @returns A promise that resolves to `null` if the migration succeeds, or an error message if validation fails.
+ */
 export function migrate(args: { newUserId: number; oldUserId: number }) {
 	return db.transaction().execute(async (trx) => {
+		const error = await validateMigration(trx, args);
+		if (error) {
+			return error;
+		}
+
 		// delete some limited data from the target user
 		// idea is to make the migration a bit more smooth
 		// since it won't fail if some small thing has been added
@@ -45,11 +59,60 @@ export function migrate(args: { newUserId: number; oldUserId: number }) {
 			.where("userId", "=", args.newUserId)
 			.execute();
 		await trx
+			.deleteFrom("Build")
+			.where("ownerId", "=", args.newUserId)
+			.execute();
+		await trx
 			.deleteFrom("UserFriendCode")
 			.where("userId", "=", args.newUserId)
 			.execute();
 		await trx
+			.deleteFrom("LFGPost")
+			.where("authorId", "=", args.newUserId)
+			.execute();
+		await trx
+			.deleteFrom("BanLog")
+			.where("userId", "=", args.newUserId)
+			.execute();
+
+		await trx
 			.updateTable("GroupMember")
+			.where("userId", "=", args.newUserId)
+			.set({ userId: args.oldUserId })
+			.execute();
+		await trx
+			.updateTable("UnvalidatedUserSubmittedImage")
+			.where("submitterUserId", "=", args.newUserId)
+			.set({ submitterUserId: args.oldUserId })
+			.execute();
+
+		// special case: delete same team membership to avoid unique constraint violation
+		await trx
+			.deleteFrom("AllTeamMember")
+			.where("userId", "=", args.oldUserId)
+			.where("leftAt", "is not", null)
+			.where((eb) =>
+				eb(
+					"AllTeamMember.teamId",
+					"=",
+					eb
+						.selectFrom("AllTeamMember")
+						.select("teamId")
+						.where("userId", "=", args.newUserId)
+						.where("leftAt", "is", null),
+				),
+			)
+			.execute();
+
+		// delete past team membership data (not user visible)
+		await trx
+			.deleteFrom("AllTeamMember")
+			.where("userId", "=", args.newUserId)
+			.where("leftAt", "is not", null)
+			.execute();
+		// existing team membership will stay
+		await trx
+			.updateTable("AllTeamMember")
 			.where("userId", "=", args.newUserId)
 			.set({ userId: args.oldUserId })
 			.execute();
@@ -65,7 +128,42 @@ export function migrate(args: { newUserId: number; oldUserId: number }) {
 			.set({ discordId: deletedUser.discordId })
 			.where("User.id", "=", args.oldUserId)
 			.execute();
+
+		return null;
 	});
+}
+
+async function validateMigration(
+	trx: Transaction<DB>,
+	args: { newUserId: number; oldUserId: number },
+) {
+	const newUserTeam = await trx
+		.selectFrom("TournamentTeamMember")
+		.select(["tournamentTeamId"])
+		.where("userId", "=", args.newUserId)
+		.executeTakeFirst();
+
+	if (newUserTeam) {
+		return "new user is in a tournament team";
+	}
+
+	const oldUserCurrentTeam = await trx
+		.selectFrom("TeamMember")
+		.select(["teamId"])
+		.where("userId", "=", args.oldUserId)
+		.executeTakeFirst();
+
+	const newUserCurrentTeam = await trx
+		.selectFrom("TeamMember")
+		.select(["teamId"])
+		.where("userId", "=", args.newUserId)
+		.executeTakeFirst();
+
+	if (oldUserCurrentTeam && newUserCurrentTeam) {
+		return "both old and new user are in teams";
+	}
+
+	return null;
 }
 
 export function replacePlusTiers(
@@ -143,25 +241,85 @@ export function banUser({
 	userId,
 	banned,
 	bannedReason,
+	bannedByUserId,
 }: {
 	userId: number;
 	banned: 1 | Date;
 	bannedReason: string | null;
+	/** Which user banned the user? If null then it means it was an automatic ban. */
+	bannedByUserId: number | null;
 }) {
-	return db
-		.updateTable("User")
-		.set({
+	return db.transaction().execute(async (trx) => {
+		const banArgs = {
 			banned: banned === 1 ? banned : dateToDatabaseTimestamp(banned),
 			bannedReason,
-		})
-		.where("User.id", "=", userId)
-		.execute();
+		};
+
+		await trx
+			.updateTable("User")
+			.set(banArgs)
+			.where("User.id", "=", userId)
+			.execute();
+
+		if (typeof bannedByUserId === "number") {
+			await trx
+				.insertInto("BanLog")
+				.values({
+					...banArgs,
+					userId,
+					bannedByUserId,
+				})
+				.execute();
+		}
+	});
 }
 
-export function unbanUser(userId: number) {
+export function unbanUser({
+	userId,
+	unbannedByUserId,
+}: {
+	userId: number;
+	unbannedByUserId: number;
+}) {
+	return db.transaction().execute(async (trx) => {
+		const banArgs = {
+			banned: 0,
+			bannedReason: null,
+		};
+
+		await trx
+			.updateTable("User")
+			.set(banArgs)
+			.where("User.id", "=", userId)
+			.execute();
+
+		await trx
+			.insertInto("BanLog")
+			.values({
+				...banArgs,
+				userId,
+				bannedByUserId: unbannedByUserId,
+			})
+			.execute();
+	});
+}
+
+export function addModNote(args: TablesInsertable["ModNote"]) {
+	return db.insertInto("ModNote").values(args).execute();
+}
+
+export function findModeNoteById(id: number) {
 	return db
-		.updateTable("User")
-		.set({ banned: 0 })
-		.where("User.id", "=", userId)
+		.selectFrom("ModNote")
+		.selectAll()
+		.where("ModNote.id", "=", id)
+		.executeTakeFirst();
+}
+
+export function deleteModNote(id: number) {
+	return db
+		.updateTable("ModNote")
+		.set({ isDeleted: 1 })
+		.where("ModNote.id", "=", id)
 		.execute();
 }

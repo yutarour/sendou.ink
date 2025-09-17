@@ -1,6 +1,4 @@
 .layout__container {
-	display: flex;
-	flex-direction: column;
 	width: 100%;
 	min-height: 100vh;
 	padding-top: 50px; /** compensate for layout__header */
@@ -33,6 +31,12 @@
 	overflow: initial;
 }
 
+.logo:focus-visible {
+	outline: 2px solid var(--theme);
+	outline-offset: 2px;
+	border-radius: var(--rounded);
+}
+
 .layout__breadcrumb-separator {
 	font-size: 20px;
 	opacity: 0.4;
@@ -44,7 +48,6 @@
 }
 
 .layout__header {
-	z-index: 501;
 	display: flex;
 	width: 100%;
 	align-items: center;
@@ -58,6 +61,7 @@
 	padding-inline: var(--s-4);
 	position: fixed;
 	top: 0;
+	z-index: 10;
 }
 
 .layout__avatar {
@@ -75,24 +79,6 @@
 	letter-spacing: 0.02rem;
 }
 
-.layout__hamburger-fab {
-	display: grid;
-	position: fixed;
-	right: 27.5px;
-	bottom: 105px;
-	border-radius: 100%;
-	width: 3.75rem;
-	height: 3.75rem;
-	backdrop-filter: var(--backdrop-filter);
-	background-color: transparent;
-	border-color: var(--theme-transparent);
-}
-
-.layout__hamburger-fab svg {
-	width: 2.25rem;
-	stroke-width: 2px;
-}
-
 .layout__header__right-container {
 	display: flex;
 	gap: var(--s-3);
@@ -102,6 +88,7 @@
 .layout__header__button {
 	width: var(--item-size);
 	height: var(--item-size);
+	outline-offset: 2px;
 	padding: 0.25rem;
 	border: 2px solid;
 	border-color: var(--theme-transparent);
@@ -109,6 +96,19 @@
 	background-color: transparent;
 	color: inherit;
 	cursor: pointer;
+}
+
+.layout__header__button:focus-visible {
+	outline: 2px solid var(--theme);
+}
+
+.layout__user-item {
+	outline-offset: 2px;
+	border-radius: 100%;
+}
+
+.layout__user-item:focus-visible {
+	outline: 2px solid var(--theme);
 }
 
 .layout__header__button__icon {
@@ -339,16 +339,13 @@
 .layout__overlay-nav__dialog {
 	min-width: 100vw;
 	min-height: 100vh;
-}
-
-.layout__overlay-nav__dialog[open],
-.layout__overlay-nav__dialog::backdrop {
-	animation: none;
+	border-radius: 0 !important;
 }
 
 .layout__overlay-nav__close-button {
 	margin-inline-start: auto;
 	margin-block-end: var(--s-4);
+	margin-inline-end: var(--s-4);
 }
 
 .layout__overlay-nav__close-button > svg {
@@ -366,12 +363,6 @@
 	}
 }
 
-@media screen and (min-width: 600px) {
-	.layout__hamburger-fab {
-		display: none;
-	}
-}
-
 @media screen and (max-width: 640px) {
 	.layout__hamburger-button {
 		display: initial;
@@ -386,7 +377,8 @@
 	}
 
 	.layout__overlay-nav__dialog {
-		padding-block: var(--s-12);
+		padding-block: var(--s-12) !important;
+		padding-inline: 0 !important;
 	}
 
 	.layout__breadcrumb-container > a {

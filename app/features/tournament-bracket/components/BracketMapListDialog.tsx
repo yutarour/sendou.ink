@@ -2,21 +2,21 @@ import { type FetcherWithComponents, Link, useFetcher } from "@remix-run/react";
 import clsx from "clsx";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "~/components/Button";
-import { Dialog } from "~/components/Dialog";
+import { SendouDialog } from "~/components/elements/Dialog";
+import { SendouSwitch } from "~/components/elements/Switch";
 import { ModeImage, StageImage } from "~/components/Image";
+import { RefreshArrowsIcon } from "~/components/icons/RefreshArrows";
 import { Label } from "~/components/Label";
 import { SubmitButton } from "~/components/SubmitButton";
-import { SendouSwitch } from "~/components/elements/Switch";
-import { RefreshArrowsIcon } from "~/components/icons/RefreshArrows";
 import type { TournamentRoundMaps } from "~/db/tables";
 import {
 	useTournament,
 	useTournamentPreparedMaps,
 } from "~/features/tournament/routes/to.$id";
 import { TOURNAMENT } from "~/features/tournament/tournament-constants";
+import * as PickBan from "~/features/tournament-bracket/core/PickBan";
 import type { TournamentManagerDataSet } from "~/modules/brackets-manager/types";
-import type { ModeShort, StageId } from "~/modules/in-game-lists";
+import type { ModeShort, StageId } from "~/modules/in-game-lists/types";
 import { nullFilledArray } from "~/utils/arrays";
 import { databaseTimestampToDate } from "~/utils/dates";
 import invariant from "~/utils/invariant";
@@ -28,12 +28,12 @@ import { UnlinkIcon } from "../../../components/icons/Unlink";
 import { logger } from "../../../utils/logger";
 import type { Bracket } from "../core/Bracket";
 import * as PreparedMaps from "../core/PreparedMaps";
-import type { Tournament } from "../core/Tournament";
 import { getRounds } from "../core/rounds";
+import type { Tournament } from "../core/Tournament";
 import {
 	type BracketMapCounts,
-	type TournamentRoundMapList,
 	generateTournamentRoundMaplist,
+	type TournamentRoundMapList,
 } from "../core/toMapList";
 
 export function BracketMapListDialog({
@@ -113,10 +113,14 @@ export function BracketMapListDialog({
 				return true;
 			}
 
-			return finalsMaps.list.every(
-				(map, i) =>
-					map.mode === thirdPlaceMaps.list![i].mode &&
-					map.stageId === thirdPlaceMaps.list![i].stageId,
+			return (
+				finalsMaps.count === thirdPlaceMaps.count &&
+				finalsMaps.pickBan === thirdPlaceMaps.pickBan &&
+				finalsMaps.list.every(
+					(map, i) =>
+						map.mode === thirdPlaceMaps.list![i].mode &&
+						map.stageId === thirdPlaceMaps.list![i].stageId,
+				)
 			);
 		},
 	);
@@ -270,7 +274,12 @@ export function BracketMapListDialog({
 		!eliminationTeamCount;
 
 	return (
-		<Dialog isOpen={isOpen} close={close} className="map-list-dialog__dialog">
+		<SendouDialog
+			heading={`Maplist selection (${bracket.name})`}
+			isOpen={isOpen}
+			onClose={close}
+			isFullScreen
+		>
 			<fetcher.Form method="post" className="map-list-dialog__container">
 				<input type="hidden" name="bracketIdx" value={bracketIdx} />
 				<input
@@ -300,7 +309,6 @@ export function BracketMapListDialog({
 					/>
 				) : null}
 				<div>
-					<h2 className="text-lg text-center">{bracket.name}</h2>
 					{preparedMaps ? (
 						<div
 							className="text-xs text-center text-lighter"
@@ -326,6 +334,7 @@ export function BracketMapListDialog({
 							<div className="stack horizontal lg flex-wrap">
 								<PickBanSelect
 									pickBanStyle={pickBanStyle}
+									isOneModeOnly={tournament.modesIncluded.length === 1}
 									onPickBanStyleChange={(pickBanStyle) => {
 										let newRoundsWithPickBan = roundsWithPickBan;
 										if (globalSelections) {
@@ -429,11 +438,11 @@ export function BracketMapListDialog({
 								) : null}
 							</div>
 							{tournament.ctx.toSetMapPool.length > 0 ? (
-								<Button
-									size="tiny"
+								<SendouButton
+									size="small"
 									icon={<RefreshArrowsIcon />}
 									variant="outlined"
-									onClick={() =>
+									onPress={() =>
 										setMaps(
 											generateTournamentRoundMaplist({
 												mapCounts,
@@ -448,7 +457,7 @@ export function BracketMapListDialog({
 									}
 								>
 									Reroll all maps
-								</Button>
+								</SendouButton>
 							) : null}
 						</div>
 						{needsToPickEliminationTeamCount ? (
@@ -586,7 +595,7 @@ export function BracketMapListDialog({
 								) : (
 									<SubmitButton
 										variant="outlined"
-										size="tiny"
+										size="small"
 										testId="confirm-finalize-bracket-button"
 										_action={isPreparing ? "PREPARE_MAPS" : "START_BRACKET"}
 										className="mx-auto"
@@ -599,7 +608,7 @@ export function BracketMapListDialog({
 					</>
 				)}
 			</fetcher.Form>
-		</Dialog>
+		</SendouDialog>
 	);
 }
 
@@ -684,7 +693,10 @@ function authorIdToUsername(tournament: Tournament, authorId: number) {
 function teamCountAdjustedBracketData({
 	bracket,
 	teamCount,
-}: { bracket: Bracket; teamCount: number }) {
+}: {
+	bracket: Bracket;
+	teamCount: number;
+}) {
 	switch (bracket.type) {
 		case "swiss":
 			// always has the same amount of rounds even if 0 participants
@@ -795,11 +807,19 @@ function GlobalCountTypeSelect({
 
 function PickBanSelect({
 	pickBanStyle,
+	isOneModeOnly,
 	onPickBanStyleChange,
 }: {
 	pickBanStyle: TournamentRoundMaps["pickBan"];
+	isOneModeOnly: boolean;
 	onPickBanStyleChange: (pickBanStyle: TournamentRoundMaps["pickBan"]) => void;
 }) {
+	const pickBanSelectText: Record<PickBan.Type, string> = {
+		COUNTERPICK: "Counterpick",
+		COUNTERPICK_MODE_REPEAT_OK: "Counterpick (mode repeat allowed)",
+		BAN_2: "Ban 2",
+	};
+
 	return (
 		<div>
 			<Label htmlFor="pick-ban-style">Pick/ban</Label>
@@ -816,8 +836,15 @@ function PickBanSelect({
 				}
 			>
 				<option value="NONE">None</option>
-				<option value="COUNTERPICK">Counterpick</option>
-				<option value="BAN_2">Ban 2</option>
+				{PickBan.types
+					.filter(
+						(type) => !isOneModeOnly || type !== "COUNTERPICK_MODE_REPEAT_OK",
+					)
+					.map((type) => (
+						<option key={type} value={type}>
+							{pickBanSelectText[type]}
+						</option>
+					))}
 			</select>
 		</div>
 	);
@@ -873,13 +900,13 @@ function RoundMapList({
 		<div>
 			<h3 className="stack horizontal sm">
 				<div>{name}</div>{" "}
-				<Button
+				<SendouButton
 					variant={editing ? "minimal-success" : "minimal"}
-					onClick={() => setEditing(!editing)}
-					testId="edit-round-maps-button"
+					onPress={() => setEditing(!editing)}
+					data-testid="edit-round-maps-button"
 				>
 					{editing ? "Save" : "Edit"}
-				</Button>
+				</SendouButton>
 			</h3>
 			{unlink ? (
 				<SendouButton
@@ -1056,13 +1083,11 @@ function MysteryRow({
 				})}
 			>
 				<span className="text-lg">{number}.</span>
-				{isCounterpicks ? (
-					<>Counterpick</>
-				) : isTiebreaker ? (
-					<>Tiebreaker</>
-				) : (
-					<>Team&apos;s pick</>
-				)}
+				{isCounterpicks
+					? "Counterpick"
+					: isTiebreaker
+						? "Tiebreaker"
+						: "Team's pick"}
 			</div>
 		</li>
 	);

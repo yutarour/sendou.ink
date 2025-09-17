@@ -1,14 +1,18 @@
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import type { TierName } from "~/features/mmr/mmr-constants";
-import type { MainWeaponId, ModeShort, StageId } from "~/modules/in-game-lists";
+import type {
+	MainWeaponId,
+	ModeShortWithSpecial,
+	StageId,
+} from "~/modules/in-game-lists/types";
 import {
-	TIER_PLUS_URL,
 	mainWeaponImageUrl,
 	modeImageUrl,
 	outlinedFiveStarMainWeaponImageUrl,
 	outlinedMainWeaponImageUrl,
 	stageImageUrl,
+	TIER_PLUS_URL,
 	tierImageUrl,
 } from "~/utils/urls";
 
@@ -44,6 +48,7 @@ export function Image({
 	loading,
 }: ImageProps) {
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: Biome v2 migration
 		<picture
 			title={title}
 			className={containerClassName}
@@ -104,7 +109,7 @@ export function WeaponImage({
 }
 
 type ModeImageProps = {
-	mode: ModeShort;
+	mode: ModeShortWithSpecial;
 } & Omit<ImageProps, "path" | "alt">;
 
 export function ModeImage({ mode, testId, title, ...rest }: ModeImageProps) {

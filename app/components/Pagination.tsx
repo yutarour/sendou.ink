@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Button } from "~/components/Button";
+import { SendouButton } from "~/components/elements/Button";
 import { ArrowLeftIcon } from "~/components/icons/ArrowLeft";
 import { ArrowRightIcon } from "~/components/icons/ArrowRight";
 import { nullFilledArray } from "~/utils/arrays";
@@ -18,33 +18,36 @@ export function Pagination({
 	setPage: (page: number) => void;
 }) {
 	return (
-		<div className="stack sm horizontal items-center justify-center flex-wrap">
-			<Button
+		<div className="pagination__container">
+			<SendouButton
 				icon={<ArrowLeftIcon />}
 				variant="outlined"
 				className="fix-rtl"
-				disabled={currentPage === 1}
-				onClick={previousPage}
+				isDisabled={currentPage === 1}
+				onPress={previousPage}
 				aria-label="Previous page"
 			/>
-			{nullFilledArray(pagesCount).map((_, i) => (
-				<div
-					key={i}
-					className={clsx("pagination__dot", {
-						pagination__dot__active: i === currentPage - 1,
-					})}
-					onClick={() => setPage(i + 1)}
-				/>
-			))}
+			<div className="pagination__dots">
+				{nullFilledArray(pagesCount).map((_, i) => (
+					// biome-ignore lint/a11y/noStaticElementInteractions: Biome v2 migration
+					<div
+						key={i}
+						className={clsx("pagination__dot", {
+							pagination__dot__active: i === currentPage - 1,
+						})}
+						onClick={() => setPage(i + 1)}
+					/>
+				))}
+			</div>
 			<div className="pagination__page-count">
 				{currentPage}/{pagesCount}
 			</div>
-			<Button
+			<SendouButton
 				icon={<ArrowRightIcon />}
 				variant="outlined"
 				className="fix-rtl"
-				disabled={currentPage === pagesCount}
-				onClick={nextPage}
+				isDisabled={currentPage === pagesCount}
+				onPress={nextPage}
 				aria-label="Next page"
 			/>
 		</div>

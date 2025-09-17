@@ -1,19 +1,14 @@
 import cachified from "@epic-web/cachified";
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { ONE_HOUR_IN_MS, TWO_HOURS_IN_MS } from "~/constants";
 import type { Tables } from "~/db/tables";
 import { getUserId } from "~/features/auth/core/user.server";
 import * as Changelog from "~/features/front-page/core/Changelog.server";
-import * as LeaderboardRepository from "~/features/leaderboards/LeaderboardRepository.server";
 import { cachedFullUserLeaderboard } from "~/features/leaderboards/core/leaderboards.server";
-import { currentOrPreviousSeason } from "~/features/mmr/season";
-import { cache, ttl } from "~/utils/cache.server";
-import {
-	discordAvatarUrl,
-	teamPage,
-	userPage,
-	userSubmittedImage,
-} from "~/utils/urls";
+import * as LeaderboardRepository from "~/features/leaderboards/LeaderboardRepository.server";
+import * as Seasons from "~/features/mmr/core/Seasons";
+import { cache, IN_MILLISECONDS, ttl } from "~/utils/cache.server";
+import { discordAvatarUrl, teamPage, userPage } from "~/utils/urls";
+import { userSubmittedImage } from "~/utils/urls-img";
 import * as ShowcaseTournaments from "../core/ShowcaseTournaments.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -24,8 +19,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 		cachified({
 			key: "front-changelog",
 			cache,
-			ttl: ttl(ONE_HOUR_IN_MS),
-			staleWhileRevalidate: ttl(TWO_HOURS_IN_MS),
+			ttl: ttl(IN_MILLISECONDS.ONE_HOUR),
+			staleWhileRevalidate: ttl(IN_MILLISECONDS.TWO_HOURS),
 			async getFreshValue() {
 				return Changelog.get();
 			},
@@ -56,10 +51,10 @@ function cachedLeaderboards(): Promise<{
 	return cachified({
 		key: "front-leaderboard",
 		cache,
-		ttl: ttl(ONE_HOUR_IN_MS),
-		staleWhileRevalidate: ttl(TWO_HOURS_IN_MS),
+		ttl: ttl(IN_MILLISECONDS.ONE_HOUR),
+		staleWhileRevalidate: ttl(IN_MILLISECONDS.TWO_HOURS),
 		async getFreshValue() {
-			const season = currentOrPreviousSeason(new Date())?.nth ?? 1;
+			const season = Seasons.currentOrPrevious()?.nth ?? 1;
 
 			const [team, user] = await Promise.all([
 				LeaderboardRepository.teamLeaderboardBySeason({

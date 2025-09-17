@@ -1,9 +1,8 @@
 import { Link, useFetcher, useLoaderData } from "@remix-run/react";
 import clsx from "clsx";
-import clone from "just-clone";
 import * as React from "react";
 import { Avatar } from "~/components/Avatar";
-import { Button } from "~/components/Button";
+import { SendouButton } from "~/components/elements/Button";
 import { Label } from "~/components/Label";
 import { SubmitButton } from "~/components/SubmitButton";
 import { useUser } from "~/features/auth/core/user";
@@ -11,7 +10,7 @@ import { inGameNameWithoutDiscriminator } from "~/utils/strings";
 import { tournamentTeamPage, userPage } from "~/utils/urls";
 import { useTournament } from "../../tournament/routes/to.$id";
 import type { TournamentDataTeam } from "../core/Tournament.server";
-import type { TournamentMatchLoaderData } from "../routes/to.$id.matches.$mid";
+import type { TournamentMatchLoaderData } from "../loaders/to.$id.matches.$mid.server";
 import { tournamentTeamToActiveRosterUserIds } from "../tournament-bracket-utils";
 import type { Result } from "./StartedMatch";
 
@@ -87,8 +86,7 @@ export function TeamRosterInputs({
 	);
 }
 
-const TeamRoster = React.memo(_TeamRoster);
-function _TeamRoster({
+export function TeamRoster({
 	team,
 	bothTeamsHaveActiveRosters,
 	presentational,
@@ -140,7 +138,7 @@ function _TeamRoster({
 		const didCancel = !editing;
 		if (didCancel) {
 			setCheckedPlayers?.((oldPlayers) => {
-				const newPlayers = clone(oldPlayers);
+				const newPlayers = structuredClone(oldPlayers);
 				newPlayers[idx] = activeRoster ?? [];
 				return newPlayers;
 			});
@@ -157,7 +155,7 @@ function _TeamRoster({
 	const onPointsChange = React.useCallback(
 		(newPoint: number) => {
 			setPoints((points) => {
-				const newPoints = clone(points);
+				const newPoints = structuredClone(points);
 				newPoints[idx] = newPoint;
 				return newPoints;
 			});
@@ -218,7 +216,7 @@ function _TeamRoster({
 					if (!setCheckedPlayers) return;
 
 					setCheckedPlayers((oldPlayers) => {
-						const newPlayers = clone(oldPlayers);
+						const newPlayers = structuredClone(oldPlayers);
 						if (oldPlayers[idx].includes(playerId)) {
 							newPlayers[idx] = newPlayers[idx].filter((id) => id !== playerId);
 						} else {
@@ -243,8 +241,7 @@ function _TeamRoster({
 	);
 }
 
-const TeamRosterHeader = React.memo(_TeamRosterHeader);
-function _TeamRosterHeader({
+export function TeamRosterHeader({
 	idx,
 	team,
 	tournamentId,
@@ -340,8 +337,7 @@ function WinnerRadio({
 	);
 }
 
-const PointInput = React.memo(_PointInput);
-function _PointInput({
+export function PointInput({
 	value,
 	onChange,
 	presentational,
@@ -360,7 +356,7 @@ function _PointInput({
 	if (presentational) {
 		return (
 			<div className="text-xs text-lighter">
-				{value === 100 ? <>KO</> : <>{value}p</>}
+				{value === 100 ? "KO" : <>{value}p</>}
 			</div>
 		);
 	}
@@ -495,15 +491,15 @@ function RosterFormWithButtons({
 	if (!editingRoster) {
 		return (
 			<div className="tournament-bracket__roster-buttons__container">
-				<Button
-					size="tiny"
-					onClick={() => setEditingRoster(true)}
+				<SendouButton
+					size="small"
+					onPress={() => setEditingRoster(true)}
 					className="tournament-bracket__edit-roster-button"
 					variant="minimal"
-					testId="edit-active-roster-button"
+					data-testid="edit-active-roster-button"
 				>
 					Edit active roster
-				</Button>
+				</SendouButton>
 			</div>
 		);
 	}
@@ -521,23 +517,23 @@ function RosterFormWithButtons({
 			<input type="hidden" name="teamId" value={teamId} />
 			<SubmitButton
 				state={fetcher.state}
-				size="tiny"
+				size="small"
 				_action="SET_ACTIVE_ROSTER"
-				disabled={!valid}
+				isDisabled={!valid}
 				testId="save-active-roster-button"
 			>
 				Save
 			</SubmitButton>
 			{showCancelButton ? (
-				<Button
-					size="tiny"
+				<SendouButton
+					size="small"
 					variant="destructive"
-					onClick={() => {
+					onPress={() => {
 						setEditingRoster(false);
 					}}
 				>
 					Cancel
-				</Button>
+				</SendouButton>
 			) : null}
 		</fetcher.Form>
 	);

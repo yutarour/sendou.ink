@@ -1,14 +1,13 @@
-import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { SUPPORT_PAGE } from "~/utils/urls";
-import { LinkButton } from "../Button";
+import { LinkButton } from "../elements/Button";
 import { HamburgerIcon } from "../icons/Hamburger";
 import { HeartIcon } from "../icons/Heart";
 import { AnythingAdder } from "./AnythingAdder";
 import { NotificationPopover } from "./NotificationPopover";
 import { UserItem } from "./UserItem";
 
-export function _TopRightButtons({
+export function TopRightButtons({
 	showSupport,
 	isErrored,
 	openNavDialog,
@@ -24,7 +23,7 @@ export function _TopRightButtons({
 			{showSupport ? (
 				<LinkButton
 					to={SUPPORT_PAGE}
-					size="tiny"
+					size="small"
 					icon={<HeartIcon />}
 					variant="outlined"
 				>
@@ -45,5 +44,3 @@ export function _TopRightButtons({
 		</div>
 	);
 }
-
-export const TopRightButtons = React.memo(_TopRightButtons);

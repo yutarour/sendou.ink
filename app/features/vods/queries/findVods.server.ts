@@ -1,7 +1,11 @@
+import * as R from "remeda";
 import { sql } from "~/db/sql";
-import type { Video } from "~/db/types";
-import type { MainWeaponId, ModeShort, StageId } from "~/modules/in-game-lists";
-import { removeDuplicates } from "~/utils/arrays";
+import type { Tables } from "~/db/tables";
+import type {
+	MainWeaponId,
+	ModeShort,
+	StageId,
+} from "~/modules/in-game-lists/types";
 import { parseDBArray, parseDBJsonArray } from "~/utils/sql";
 import { weaponIdToArrayWithAlts } from "../../../modules/in-game-lists/weapon-ids";
 import { VODS_PAGE_BATCH_SIZE } from "../vods-constants";
@@ -57,7 +61,7 @@ export function findVods({
 	weapon?: MainWeaponId;
 	mode?: ModeShort;
 	stageId?: StageId;
-	type?: Video["type"];
+	type?: Tables["Video"]["type"];
 	userId?: number;
 	limit?: number;
 }): Array<ListVod> {
@@ -87,7 +91,7 @@ export function findVods({
 
 			return {
 				...vod,
-				weapons: removeDuplicates(parseDBArray(vod.weapons)),
+				weapons: R.unique(parseDBArray(vod.weapons)),
 				pov: playerNames[0] ?? players[0],
 			};
 		})

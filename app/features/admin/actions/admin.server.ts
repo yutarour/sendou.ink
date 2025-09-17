@@ -1,17 +1,17 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
-import { z } from "zod";
+import { z } from "zod/v4";
 import * as AdminRepository from "~/features/admin/AdminRepository.server";
 import { makeArtist } from "~/features/art/queries/makeArtist.server";
-import { requireUserId } from "~/features/auth/core/user.server";
+import { requireUser } from "~/features/auth/core/user.server";
 import { refreshBannedCache } from "~/features/ban/core/banned.server";
 import * as UserRepository from "~/features/user-page/UserRepository.server";
-import { isAdmin, isMod } from "~/permissions";
-import { logger } from "~/utils/logger";
+import { requireRole } from "~/modules/permissions/guards.server";
 import {
-	errorToastIfFalsy,
+	errorToast,
 	parseRequestPayload,
 	successToast,
 } from "~/utils/remix.server";
+import { errorIsSqliteForeignKeyConstraintFailure } from "~/utils/sql";
 import { assertUnreachable } from "~/utils/types";
 import { _action, actualNumber, friendCode } from "~/utils/zod";
 import { plusTiersFromVotingAndLeaderboard } from "../core/plus-tier.server";
@@ -21,23 +21,37 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 		request,
 		schema: adminActionSchema,
 	});
-	const user = await requireUserId(request);
+	const user = await requireUser(request);
 
 	let message: string;
 	switch (data._action) {
 		case "MIGRATE": {
-			errorToastIfFalsy(isMod(user), "Admin needed");
+			requireRole(user, "STAFF");
 
-			await AdminRepository.migrate({
-				oldUserId: data["old-user"],
-				newUserId: data["new-user"],
-			});
+			try {
+				const errorMessage = await AdminRepository.migrate({
+					oldUserId: data["old-user"],
+					newUserId: data["new-user"],
+				});
 
-			message = "Account migrated";
-			break;
+				if (errorMessage) {
+					errorToast(`Migration failed. Reason: ${errorMessage}`);
+				}
+
+				message = "Account migrated";
+				break;
+			} catch (err) {
+				if (errorIsSqliteForeignKeyConstraintFailure(err)) {
+					errorToast(
+						"New user has data preventing the migration (e.g. member of tournament teams or SendouQ played)",
+					);
+				}
+
+				throw err;
+			}
 		}
 		case "REFRESH": {
-			errorToastIfFalsy(isAdmin(user), "Admin needed");
+			requireRole(user, "ADMIN");
 
 			await AdminRepository.replacePlusTiers(
 				await plusTiersFromVotingAndLeaderboard(),
@@ -47,7 +61,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 			break;
 		}
 		case "FORCE_PATRON": {
-			errorToastIfFalsy(isAdmin(user), "Admin needed");
+			requireRole(user, "ADMIN");
 
 			await AdminRepository.forcePatron({
 				id: data.user,
@@ -60,7 +74,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 			break;
 		}
 		case "CLEAN_UP": {
-			errorToastIfFalsy(isAdmin(user), "Admin needed");
+			requireRole(user, "ADMIN");
 
 			// on purpose sync
 			AdminRepository.cleanUp();
@@ -69,7 +83,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 			break;
 		}
 		case "ARTIST": {
-			errorToastIfFalsy(isMod(user), "Mod needed");
+			requireRole(user, "STAFF");
 
 			makeArtist(data.user);
 
@@ -77,7 +91,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 			break;
 		}
 		case "VIDEO_ADDER": {
-			errorToastIfFalsy(isMod(user), "Mod needed");
+			requireRole(user, "STAFF");
 
 			await AdminRepository.makeVideoAdderByUserId(data.user);
 
@@ -85,7 +99,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 			break;
 		}
 		case "TOURNAMENT_ORGANIZER": {
-			errorToastIfFalsy(isMod(user), "Mod needed");
+			requireRole(user, "ADMIN");
 
 			await AdminRepository.makeTournamentOrganizerByUserId(data.user);
 
@@ -93,7 +107,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 			break;
 		}
 		case "LINK_PLAYER": {
-			errorToastIfFalsy(isMod(user), "Mod needed");
+			requireRole(user, "STAFF");
 
 			await AdminRepository.linkUserAndPlayer({
 				userId: data.user,
@@ -104,45 +118,35 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 			break;
 		}
 		case "BAN_USER": {
-			errorToastIfFalsy(isMod(user), "Mod needed");
+			requireRole(user, "STAFF");
 
 			await AdminRepository.banUser({
 				bannedReason: data.reason ?? null,
 				userId: data.user,
 				banned: data.duration ? new Date(data.duration) : 1,
+				bannedByUserId: user.id,
 			});
 
 			refreshBannedCache();
-
-			logger.info("Banned user", {
-				userId: data.user,
-				byUserId: user.id,
-				reason: data.reason,
-				duration: data.duration
-					? new Date(data.duration).toLocaleString()
-					: undefined,
-			});
 
 			message = "User banned";
 			break;
 		}
 		case "UNBAN_USER": {
-			errorToastIfFalsy(isMod(user), "Mod needed");
+			requireRole(user, "STAFF");
 
-			await AdminRepository.unbanUser(data.user);
+			await AdminRepository.unbanUser({
+				userId: data.user,
+				unbannedByUserId: user.id,
+			});
 
 			refreshBannedCache();
-
-			logger.info("Unbanned user", {
-				userId: data.user,
-				byUserId: user.id,
-			});
 
 			message = "User unbanned";
 			break;
 		}
 		case "UPDATE_FRIEND_CODE": {
-			errorToastIfFalsy(isMod(user), "Mod needed");
+			requireRole(user, "STAFF");
 
 			await UserRepository.insertFriendCode({
 				friendCode: data.friendCode,

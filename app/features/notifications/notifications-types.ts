@@ -37,6 +37,13 @@ export type Notification =
 				tournamentName: string;
 			}
 	  >
+	| NotificationItem<
+			"TO_TEST_CREATED",
+			{
+				tournamentId: number;
+				tournamentName: string;
+			}
+	  >
 	| NotificationItem<"BADGE_ADDED", { badgeName: string; badgeId: number }>
 	| NotificationItem<
 			"BADGE_MANAGER_ADDED",
@@ -53,7 +60,10 @@ export type Notification =
 			"TAGGED_TO_ART",
 			{ adderUsername: string; adderDiscordId: string; artId: number }
 	  >
-	| NotificationItem<"SEASON_STARTED", { seasonNth: number }>;
+	| NotificationItem<"SEASON_STARTED", { seasonNth: number }>
+	| NotificationItem<"SCRIM_NEW_REQUEST", { fromUsername: string }>
+	| NotificationItem<"SCRIM_SCHEDULED", { id: number; at: number }>
+	| NotificationItem<"SCRIM_CANCELED", { id: number; at: number }>;
 
 type NotificationItem<
 	T extends string,

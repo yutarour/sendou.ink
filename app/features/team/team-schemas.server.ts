@@ -1,20 +1,20 @@
-import { z } from "zod";
+import { z } from "zod/v4";
 import {
 	_action,
-	actuallyNonEmptyStringOrNull,
 	customCssVarObject,
 	falsyToNull,
 	id,
+	safeStringSchema,
 } from "~/utils/zod";
 import { TEAM, TEAM_MEMBER_ROLES } from "./team-constants";
 
 export const teamParamsSchema = z.object({ customUrl: z.string() });
 
 export const createTeamSchema = z.object({
-	name: z.preprocess(
-		actuallyNonEmptyStringOrNull,
-		z.string().min(TEAM.NAME_MIN_LENGTH).max(TEAM.NAME_MAX_LENGTH),
-	),
+	name: safeStringSchema({
+		min: TEAM.NAME_MIN_LENGTH,
+		max: TEAM.NAME_MAX_LENGTH,
+	}),
 });
 
 export const teamProfilePageActionSchema = z.union([
@@ -26,10 +26,16 @@ export const teamProfilePageActionSchema = z.union([
 	}),
 ]);
 
+const deleteActionsSchema = z.object({
+	_action: z.union([
+		_action("DELETE_TEAM"),
+		_action("DELETE_AVATAR"),
+		_action("DELETE_BANNER"),
+	]),
+});
+
 export const editTeamSchema = z.union([
-	z.object({
-		_action: _action("DELETE"),
-	}),
+	deleteActionsSchema,
 	z.object({
 		_action: _action("EDIT"),
 		name: z.string().min(TEAM.NAME_MIN_LENGTH).max(TEAM.NAME_MAX_LENGTH),

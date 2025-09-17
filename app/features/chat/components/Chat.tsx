@@ -1,40 +1,14 @@
-import { useRevalidator } from "@remix-run/react";
 import clsx from "clsx";
-import { nanoid } from "nanoid";
+import { sub } from "date-fns";
 import * as React from "react";
+import { Button } from "react-aria-components";
 import { useTranslation } from "react-i18next";
-import ReconnectingWebSocket from "reconnecting-websocket";
-import type { User } from "~/db/types";
-import { useUser } from "~/features/auth/core/user";
-import invariant from "~/utils/invariant";
-import { logger } from "~/utils/logger";
-import { soundPath } from "~/utils/urls";
 import { Avatar } from "../../../components/Avatar";
-import { Button } from "../../../components/Button";
+import { SendouButton } from "../../../components/elements/Button";
 import { SubmitButton } from "../../../components/SubmitButton";
 import { MESSAGE_MAX_LENGTH } from "../chat-constants";
-import { useChatAutoScroll } from "../chat-hooks";
-import type { ChatMessage } from "../chat-types";
-import { messageTypeToSound, soundEnabled, soundVolume } from "../chat-utils";
-
-type ChatUser = Pick<User, "username" | "discordId" | "discordAvatar"> & {
-	chatNameColor: string | null;
-	title?: string;
-};
-
-export interface ChatProps {
-	users: Record<number, ChatUser>;
-	rooms: { label: string; code: string }[];
-	className?: string;
-	messagesContainerClassName?: string;
-	hidden?: boolean;
-	onNewMessage?: (message: ChatMessage) => void;
-	onMount?: () => void;
-	onUnmount?: () => void;
-	disabled?: boolean;
-	missingUserName?: string;
-	revalidates?: boolean;
-}
+import { useChat, useChatAutoScroll } from "../chat-hooks";
+import type { ChatMessage, ChatProps, ChatUser } from "../chat-types";
 
 export function ConnectedChat(props: ChatProps) {
 	const chat = useChat(props);
@@ -64,7 +38,7 @@ export function Chat({
 		messages,
 		currentRoom,
 		setCurrentRoom,
-		connected,
+		readyState,
 		unseenMessages,
 	} = chat;
 
@@ -94,7 +68,7 @@ export function Chat({
 		};
 	}, [onMount, onUnmount]);
 
-	const sendingMessagesDisabled = disabled || !connected;
+	const sendingMessagesDisabled = disabled || readyState !== "CONNECTED";
 
 	const systemMessageText = (msg: ChatMessage) => {
 		const name = () => {
@@ -137,7 +111,7 @@ export function Chat({
 								className={clsx("chat__room-button", {
 									current: currentRoom === room.code,
 								})}
-								onClick={() => {
+								onPress={() => {
 									setCurrentRoom(room.code);
 									resetScroller();
 								}}
@@ -185,9 +159,12 @@ export function Chat({
 					})}
 				</ol>
 				{unseenMessagesInTheRoom ? (
-					<Button className="chat__unseen-messages" onClick={scrollToBottom}>
+					<SendouButton
+						className="chat__unseen-messages"
+						onPress={scrollToBottom}
+					>
 						{t("common:chat.newMessages")}
-					</Button>
+					</SendouButton>
 				) : null}
 				<form onSubmit={handleSubmit} className="mt-4">
 					<input
@@ -198,11 +175,13 @@ export function Chat({
 						maxLength={MESSAGE_MAX_LENGTH}
 					/>{" "}
 					<div className="chat__bottom-row">
-						{typeof connected !== "boolean" ? (
-							<div />
-						) : connected ? (
+						{readyState === "CONNECTED" || readyState === "CONNECTING" ? (
 							<div className="text-xxs font-semi-bold text-lighter">
-								{t("common:chat.connected")}
+								{t(
+									readyState === "CONNECTED"
+										? "common:chat.connected"
+										: "common:chat.connecting",
+								)}
 							</div>
 						) : (
 							<div className="text-xxs font-semi-bold text-warning">
@@ -210,9 +189,9 @@ export function Chat({
 							</div>
 						)}
 						<SubmitButton
-							size="tiny"
+							size="small"
 							variant="minimal"
-							disabled={sendingMessagesDisabled}
+							isDisabled={sendingMessagesDisabled}
 						>
 							{t("common:chat.send")}
 						</SubmitButton>
@@ -253,9 +232,7 @@ function Message({
 						</div>
 					) : null}
 					{!message.pending ? (
-						<time className="chat__message__time">
-							{new Date(message.timestamp).toLocaleTimeString()}
-						</time>
+						<MessageTimestamp timestamp={message.timestamp} />
 					) : null}
 				</div>
 				<div
@@ -281,9 +258,7 @@ function SystemMessage({
 		<li className="chat__message">
 			<div>
 				<div className="stack horizontal sm">
-					<time className="chat__message__time">
-						{new Date(message.timestamp).toLocaleTimeString()}
-					</time>
+					<MessageTimestamp timestamp={message.timestamp} />
 				</div>
 				<div className="chat__message__contents text-xs text-lighter font-semi-bold">
 					{text}
@@ -293,184 +268,20 @@ function SystemMessage({
 	);
 }
 
-// TODO: should contain unseen messages logic, now it's duplicated
-export function useChat({
-	rooms,
-	onNewMessage,
-	revalidates = true,
-}: {
-	rooms: ChatProps["rooms"];
-	onNewMessage?: (message: ChatMessage) => void;
-	revalidates?: boolean;
-}) {
-	const { revalidate } = useRevalidator();
-	const shouldRevalidate = React.useRef<boolean>();
-	const user = useUser();
+function MessageTimestamp({ timestamp }: { timestamp: number }) {
+	const { i18n } = useTranslation();
+	const moreThanDayAgo = sub(new Date(), { days: 1 }) > new Date(timestamp);
 
-	const [messages, setMessages] = React.useState<ChatMessage[]>([]);
-	const [connected, setConnected] = React.useState<null | boolean>(null);
-	const [sentMessage, setSentMessage] = React.useState<ChatMessage>();
-	const [currentRoom, setCurrentRoom] = React.useState<string | undefined>(
-		rooms[0]?.code,
+	return (
+		<time className="chat__message__time">
+			{moreThanDayAgo
+				? new Date(timestamp).toLocaleString(i18n.language, {
+						day: "numeric",
+						month: "numeric",
+						hour: "numeric",
+						minute: "numeric",
+					})
+				: new Date(timestamp).toLocaleTimeString(i18n.language)}
+		</time>
 	);
-
-	const ws = React.useRef<ReconnectingWebSocket>();
-	const lastSeenMessagesByRoomId = React.useRef<Map<string, string>>(new Map());
-
-	// same principal as here behind separating it into a ref: https://overreacted.io/making-setinterval-declarative-with-react-hooks/
-	React.useEffect(() => {
-		shouldRevalidate.current = revalidates;
-	}, [revalidates]);
-
-	React.useEffect(() => {
-		if (rooms.length === 0) return;
-		if (!import.meta.env.VITE_SKALOP_WS_URL) {
-			logger.warn("No WS URL provided");
-			return;
-		}
-
-		const url = `${import.meta.env.VITE_SKALOP_WS_URL}?${rooms
-			.map((room) => `room=${room.code}`)
-			.join("&")}`;
-		ws.current = new ReconnectingWebSocket(url, [], {
-			maxReconnectionDelay: 10000 * 2,
-			reconnectionDelayGrowFactor: 1.5,
-		});
-		ws.current.onopen = () => {
-			setCurrentRoom(rooms[0].code);
-			setConnected(true);
-		};
-		ws.current.onclose = () => setConnected(false);
-
-		ws.current.onmessage = (e) => {
-			const message = JSON.parse(e.data);
-			const messageArr = (
-				Array.isArray(message) ? message : [message]
-			) as ChatMessage[];
-
-			// something interesting happened
-			// -> let's run data loaders so they can see it sooner
-			const isSystemMessage = Boolean(messageArr[0].type);
-			if (isSystemMessage && shouldRevalidate.current) {
-				revalidate();
-			}
-
-			const sound = messageTypeToSound(messageArr[0].type);
-			if (sound && soundEnabled(sound)) {
-				const audio = new Audio(soundPath(sound));
-				audio.volume = soundVolume() / 100;
-				void audio
-					.play()
-					.catch((e) => logger.error(`Couldn't play sound: ${e}`));
-			}
-
-			if (messageArr[0].revalidateOnly) {
-				return;
-			}
-
-			const isInitialLoad = Array.isArray(message);
-
-			if (isInitialLoad) {
-				lastSeenMessagesByRoomId.current = message.reduce((acc, cur) => {
-					acc.set(cur.room, cur.id);
-					return acc;
-				}, new Map<string, string>());
-			}
-
-			if (isInitialLoad) {
-				setMessages(messageArr);
-			} else {
-				if (!isSystemMessage) onNewMessage?.(message);
-				setMessages((messages) => [...messages, ...messageArr]);
-			}
-		};
-
-		const wsCurrent = ws.current;
-		return () => {
-			wsCurrent?.close();
-			setMessages([]);
-		};
-	}, [rooms, onNewMessage, revalidate]);
-
-	React.useEffect(() => {
-		// ping every minute to keep connection alive
-		const interval = setInterval(() => {
-			ws.current?.send("");
-		}, 1000 * 60);
-
-		return () => {
-			clearInterval(interval);
-		};
-	}, []);
-
-	const send = React.useCallback(
-		(contents: string) => {
-			invariant(currentRoom);
-
-			const id = nanoid();
-			setSentMessage({
-				id,
-				room: currentRoom,
-				contents,
-				timestamp: Date.now(),
-				userId: user!.id,
-			});
-			ws.current!.send(JSON.stringify({ id, contents, room: currentRoom }));
-		},
-		[user, currentRoom],
-	);
-
-	let allMessages = messages;
-	if (sentMessage && !messages.some((msg) => msg.id === sentMessage.id)) {
-		allMessages = [...messages, { ...sentMessage, pending: true }];
-	}
-
-	const roomsMessages = allMessages
-		.filter((msg) => msg.room === currentRoom)
-		.sort((a, b) => a.timestamp - b.timestamp);
-	if (roomsMessages.length > 0 && currentRoom) {
-		lastSeenMessagesByRoomId.current.set(
-			currentRoom,
-			roomsMessages[roomsMessages.length - 1].id,
-		);
-	}
-
-	const unseenMessages = unseenMessagesCountByRoomId({
-		messages,
-		lastSeenMessages: lastSeenMessagesByRoomId.current,
-	});
-
-	return {
-		messages: roomsMessages,
-		send,
-		currentRoom,
-		setCurrentRoom,
-		connected,
-		unseenMessages,
-	};
-}
-
-function unseenMessagesCountByRoomId({
-	messages,
-	lastSeenMessages,
-}: {
-	messages: ChatMessage[];
-	lastSeenMessages: Map<string, string>;
-}) {
-	const lastUnseenEncountered = new Set<string>();
-
-	const unseenMessages = messages.filter((msg) => {
-		if (msg.id === lastSeenMessages.get(msg.room)) {
-			lastUnseenEncountered.add(msg.room);
-			return false;
-		}
-
-		return lastUnseenEncountered.has(msg.room);
-	});
-
-	return unseenMessages.reduce((acc, cur) => {
-		const count = acc.get(cur.room) ?? 0;
-		acc.set(cur.room, count + 1);
-		return acc;
-	}, new Map<string, number>());
 }

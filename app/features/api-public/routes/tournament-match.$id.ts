@@ -1,11 +1,11 @@
-import { type LoaderFunctionArgs, json } from "@remix-run/node";
+import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { jsonArrayFrom } from "kysely/helpers/sqlite";
 import { cors } from "remix-utils/cors";
-import { z } from "zod";
+import { z } from "zod/v4";
 import { db } from "~/db/sql";
-import { tournamentFromDBCached } from "~/features/tournament-bracket/core/Tournament.server";
-import { resolveMapList } from "~/features/tournament-bracket/core/mapList.server";
 import * as TournamentRepository from "~/features/tournament/TournamentRepository.server";
+import { resolveMapList } from "~/features/tournament-bracket/core/mapList.server";
+import { tournamentFromDBCached } from "~/features/tournament-bracket/core/Tournament.server";
 import i18next from "~/modules/i18n/i18next.server";
 import { notFoundIfFalsy, parseParams } from "~/utils/remix.server";
 import { id } from "~/utils/zod";
@@ -49,7 +49,6 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 				"TournamentMatch.opponentOne",
 				"TournamentMatch.opponentTwo",
 				"Tournament.mapPickingStyle",
-				"TournamentMatch.bestOf",
 				"TournamentRound.maps",
 				jsonArrayFrom(
 					eb
@@ -59,6 +58,8 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 							"TournamentMatchGameResult.mode",
 							"TournamentMatchGameResult.winnerTeamId",
 							"TournamentMatchGameResult.source",
+							"TournamentMatchGameResult.opponentOnePoints",
+							"TournamentMatchGameResult.opponentTwoPoints",
 							jsonArrayFrom(
 								innerEb
 									.selectFrom("TournamentMatchGameResultParticipant")
@@ -71,7 +72,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 							).as("participants"),
 						])
 						.where("TournamentMatchGameResult.matchId", "=", id)
-						.orderBy("TournamentMatchGameResult.number asc"),
+						.orderBy("TournamentMatchGameResult.number", "asc"),
 				).as("playedMapList"),
 			])
 			.where("TournamentMatch.id", "=", id)
@@ -97,17 +98,21 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 			match.opponentOne.result === "win" ||
 			match.opponentTwo.result === "win"
 		) {
-			return match.playedMapList.map((map) => ({
+			return match.playedMapList.map((playedMap) => ({
 				map: {
-					mode: map.mode,
+					mode: playedMap.mode,
 					stage: {
-						id: map.stageId,
-						name: t(`game-misc:STAGE_${map.stageId}`),
+						id: playedMap.stageId,
+						name: t(`game-misc:STAGE_${playedMap.stageId}`),
 					},
 				},
-				participatedUserIds: map.participants.map((p) => p.userId),
-				winnerTeamId: map.winnerTeamId,
-				source: parseSource(map.source),
+				participatedUserIds: playedMap.participants.map((p) => p.userId),
+				winnerTeamId: playedMap.winnerTeamId,
+				source: parseSource(playedMap.source),
+				points:
+					playedMap.opponentOnePoints && playedMap.opponentTwoPoints
+						? [playedMap.opponentOnePoints, playedMap.opponentTwoPoints]
+						: null,
 			}));
 		}
 
@@ -116,25 +121,25 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 			: [];
 
 		return resolveMapList({
-			bestOf: match.bestOf,
 			tournamentId: match.tournamentId,
 			matchId: id,
 			teams: [match.opponentOne.id, match.opponentTwo.id],
 			mapPickingStyle: match.mapPickingStyle,
 			maps: match.maps,
 			pickBanEvents,
-		}).map((map) => {
+		}).map((mapListMap) => {
 			return {
 				map: {
-					mode: map.mode,
+					mode: mapListMap.mode,
 					stage: {
-						id: map.stageId,
-						name: t(`game-misc:STAGE_${map.stageId}`),
+						id: mapListMap.stageId,
+						name: t(`game-misc:STAGE_${mapListMap.stageId}`),
 					},
 				},
 				participatedUserIds: null,
 				winnerTeamId: null,
-				source: map.source,
+				source: mapListMap.source,
+				points: null,
 			};
 		});
 	};
@@ -144,7 +149,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 			tournamentId: match.tournamentId,
 			user: undefined,
 		})
-	).matchNameById(id);
+	).matchContextNamesById(id);
 
 	const result: GetTournamentMatchResponse = {
 		teamOne: match.opponentOne.id

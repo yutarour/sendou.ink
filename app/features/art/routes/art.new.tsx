@@ -1,56 +1,31 @@
-import type {
-	ActionFunction,
-	LoaderFunctionArgs,
-	MetaFunction,
-} from "@remix-run/node";
-import {
-	unstable_composeUploadHandlers as composeUploadHandlers,
-	unstable_createMemoryUploadHandler as createMemoryUploadHandler,
-	unstable_parseMultipartFormData as parseMultipartFormData,
-	redirect,
-} from "@remix-run/node";
+import type { MetaFunction } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
 import Compressor from "compressorjs";
-import clone from "just-clone";
 import { nanoid } from "nanoid";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { useFetcher } from "react-router-dom";
 import { Alert } from "~/components/Alert";
-import { Button } from "~/components/Button";
-import { Combobox } from "~/components/Combobox";
+import { SendouButton } from "~/components/elements/Button";
+import { SendouSwitch } from "~/components/elements/Switch";
+import { UserSearch } from "~/components/elements/UserSearch";
 import { FormMessage } from "~/components/FormMessage";
+import { CrossIcon } from "~/components/icons/Cross";
 import { Label } from "~/components/Label";
 import { Main } from "~/components/Main";
-import { UserSearch } from "~/components/UserSearch";
-import { SendouSwitch } from "~/components/elements/Switch";
-import { CrossIcon } from "~/components/icons/Cross";
-import { useUser } from "~/features/auth/core/user";
-import { requireUser } from "~/features/auth/core/user.server";
-import { s3UploadHandler } from "~/features/img-upload";
-import { notify } from "~/features/notifications/core/notify.server";
-import { dateToDatabaseTimestamp } from "~/utils/dates";
+import { useHasRole } from "~/modules/permissions/hooks";
 import invariant from "~/utils/invariant";
-import {
-	type SendouRouteHandle,
-	errorToastIfFalsy,
-	parseFormData,
-	parseRequestPayload,
-	unauthorizedIfFalsy,
-} from "~/utils/remix.server";
-import {
-	artPage,
-	conditionalUserSubmittedImage,
-	navIconUrl,
-	userArtPage,
-} from "~/utils/urls";
+import { logger } from "~/utils/logger";
+import type { SendouRouteHandle } from "~/utils/remix.server";
+import { artPage, navIconUrl } from "~/utils/urls";
+import { conditionalUserSubmittedImage } from "~/utils/urls-img";
 import { metaTitle } from "../../../utils/remix";
-import { ART, NEW_ART_EXISTING_SEARCH_PARAM_KEY } from "../art-constants";
-import { editArtSchema, newArtSchema } from "../art-schemas.server";
+import { action } from "../actions/art.new.server";
+import { ART } from "../art-constants";
 import { previewUrl } from "../art-utils";
-import { addNewArt, editArt } from "../queries/addNewArt.server";
-import { allArtTags } from "../queries/allArtTags.server";
-import { findArtById } from "../queries/findArtById.server";
+import { TagSelect } from "../components/TagSelect";
+import { loader } from "../loaders/art.new.server";
+export { loader, action };
 
 export const handle: SendouRouteHandle = {
 	i18n: ["art"],
@@ -67,113 +42,6 @@ export const meta: MetaFunction = () => {
 	});
 };
 
-export const action: ActionFunction = async ({ request }) => {
-	const user = await requireUser(request);
-	errorToastIfFalsy(user.isArtist, "Lacking artist role");
-
-	const searchParams = new URL(request.url).searchParams;
-	const artIdRaw = searchParams.get(NEW_ART_EXISTING_SEARCH_PARAM_KEY);
-
-	// updating logic
-	if (artIdRaw) {
-		const artId = Number(artIdRaw);
-
-		const existingArt = findArtById(artId);
-		errorToastIfFalsy(
-			existingArt?.authorId === user.id,
-			"Art author is someone else",
-		);
-
-		const data = await parseRequestPayload({
-			request,
-			schema: editArtSchema,
-		});
-
-		const editedArtId = editArt({
-			authorId: user.id,
-			artId,
-			description: data.description,
-			isShowcase: data.isShowcase,
-			linkedUsers: data.linkedUsers,
-			tags: data.tags,
-		});
-
-		const newLinkedUsers = data.linkedUsers.filter(
-			(userId) => !existingArt.linkedUsers.includes(userId),
-		);
-
-		notify({
-			userIds: newLinkedUsers,
-			notification: {
-				type: "TAGGED_TO_ART",
-				meta: {
-					adderUsername: user.username,
-					adderDiscordId: user.discordId,
-					artId: editedArtId,
-				},
-			},
-		});
-	} else {
-		const uploadHandler = composeUploadHandlers(
-			s3UploadHandler(`art-${nanoid()}-${Date.now()}`),
-			createMemoryUploadHandler(),
-		);
-		const formData = await parseMultipartFormData(request, uploadHandler);
-		const imgSrc = formData.get("img") as string | null;
-		invariant(imgSrc);
-
-		const urlParts = imgSrc.split("/");
-		const fileName = urlParts[urlParts.length - 1];
-		invariant(fileName);
-
-		const data = await parseFormData({
-			formData,
-			schema: newArtSchema,
-		});
-
-		const addedArtId = addNewArt({
-			authorId: user.id,
-			description: data.description,
-			url: fileName,
-			validatedAt: user.patronTier ? dateToDatabaseTimestamp(new Date()) : null,
-			linkedUsers: data.linkedUsers,
-			tags: data.tags,
-		});
-
-		notify({
-			userIds: data.linkedUsers,
-			notification: {
-				type: "TAGGED_TO_ART",
-				meta: {
-					adderUsername: user.username,
-					adderDiscordId: user.discordId,
-					artId: addedArtId,
-				},
-			},
-		});
-	}
-
-	throw redirect(userArtPage(user));
-};
-
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-	const user = await requireUser(request);
-	unauthorizedIfFalsy(user.isArtist);
-
-	const artIdRaw = new URL(request.url).searchParams.get(
-		NEW_ART_EXISTING_SEARCH_PARAM_KEY,
-	);
-	if (!artIdRaw) return { art: null, tags: allArtTags() };
-	const artId = Number(artIdRaw);
-
-	const art = findArtById(artId);
-	if (!art || art.authorId !== user.id) {
-		return { art: null, tags: allArtTags() };
-	}
-
-	return { art, tags: allArtTags() };
-};
-
 export default function NewArtPage() {
 	const data = useLoaderData<typeof loader>();
 	const [img, setImg] = React.useState<File | null>(null);
@@ -181,7 +49,7 @@ export default function NewArtPage() {
 	const { t } = useTranslation(["common", "art"]);
 	const ref = React.useRef<HTMLFormElement>(null);
 	const fetcher = useFetcher();
-	const user = useUser();
+	const isArtist = useHasRole("ARTIST");
 
 	const handleSubmit = () => {
 		const formData = new FormData(ref.current!);
@@ -201,7 +69,7 @@ export default function NewArtPage() {
 		return !img && !data.art;
 	};
 
-	if (!user || !user.isArtist) {
+	if (!isArtist) {
 		return (
 			<Main className="stack items-center">
 				<Alert variation="WARNING">{t("art:gainPerms")}</Alert>
@@ -219,9 +87,12 @@ export default function NewArtPage() {
 				<LinkedUsers />
 				{data.art ? <ShowcaseToggle /> : null}
 				<div>
-					<Button onClick={handleSubmit} disabled={submitButtonDisabled()}>
+					<SendouButton
+						onPress={handleSubmit}
+						isDisabled={submitButtonDisabled()}
+					>
 						{t("common:actions.save")}
-					</Button>
+					</SendouButton>
 				</div>
 			</Form>
 		</Main>
@@ -239,6 +110,7 @@ function ImageUpload({
 }) {
 	const data = useLoaderData<typeof loader>();
 	const { t } = useTranslation(["common"]);
+	const id = React.useId();
 
 	if (data.art) {
 		return (
@@ -251,9 +123,9 @@ function ImageUpload({
 
 	return (
 		<div>
-			<label htmlFor="img-field">{t("common:upload.imageToUpload")}</label>
+			<label htmlFor={id}>{t("common:upload.imageToUpload")}</label>
 			<input
-				id="img-field"
+				id={id}
 				className="plain"
 				type="file"
 				name="img"
@@ -273,7 +145,7 @@ function ImageUpload({
 							setImg(file);
 						},
 						error(err) {
-							console.error(err.message);
+							logger.error(err.message);
 						},
 					});
 
@@ -286,7 +158,7 @@ function ImageUpload({
 							setSmallImg(file);
 						},
 						error(err) {
-							console.error(err.message);
+							logger.error(err.message);
 						},
 					});
 				}}
@@ -300,17 +172,18 @@ function Description() {
 	const { t } = useTranslation(["art"]);
 	const data = useLoaderData<typeof loader>();
 	const [value, setValue] = React.useState(data.art?.description ?? "");
+	const id = React.useId();
 
 	return (
 		<div>
 			<Label
-				htmlFor="description"
+				htmlFor={id}
 				valueLimits={{ current: value.length, max: ART.DESCRIPTION_MAX_LENGTH }}
 			>
 				{t("art:forms.description.title")}
 			</Label>
 			<textarea
-				id="description"
+				id={id}
 				name="description"
 				value={value}
 				onChange={(e) => setValue(e.target.value)}
@@ -331,11 +204,6 @@ function Tags() {
 	);
 	const [newTagValue, setNewTagValue] = React.useState("");
 
-	const existingTags = data.tags;
-	const unselectedTags = existingTags.filter(
-		(t) => !tags.some((tag) => tag.id === t.id),
-	);
-
 	const handleAddNewTag = () => {
 		const normalizedNewTagValue = newTagValue
 			.trim()
@@ -350,7 +218,7 @@ function Tags() {
 			return;
 		}
 
-		const alreadyCreatedTag = existingTags.find(
+		const alreadyCreatedTag = data.tags.find(
 			(t) => t.name === normalizedNewTagValue,
 		);
 
@@ -372,16 +240,19 @@ function Tags() {
 			<input type="hidden" name="tags" value={JSON.stringify(tags)} />
 			{creationMode ? (
 				<div className="art__creation-mode-switcher-container">
-					<Button variant="minimal" onClick={() => setCreationMode(false)}>
+					<SendouButton
+						variant="minimal"
+						onPress={() => setCreationMode(false)}
+					>
 						{t("art:forms.tags.selectFromExisting")}
-					</Button>
+					</SendouButton>
 				</div>
 			) : (
 				<div className="stack horizontal sm text-xs text-lighter art__creation-mode-switcher-container">
 					{t("art:forms.tags.cantFindExisting")}{" "}
-					<Button variant="minimal" onClick={() => setCreationMode(true)}>
+					<SendouButton variant="minimal" onPress={() => setCreationMode(true)}>
 						{t("art:forms.tags.addNew")}
-					</Button>
+					</SendouButton>
 				</div>
 			)}
 			{tags.length >= ART.TAGS_MAX_LENGTH ? (
@@ -401,28 +272,23 @@ function Tags() {
 							}
 						}}
 					/>
-					<Button size="tiny" variant="outlined" onClick={handleAddNewTag}>
+					<SendouButton
+						size="small"
+						variant="outlined"
+						onPress={handleAddNewTag}
+					>
 						{t("common:actions.add")}
-					</Button>
+					</SendouButton>
 				</div>
 			) : (
-				<Combobox
+				<TagSelect
 					// empty combobox on select
 					key={tags.length}
-					options={unselectedTags.map((t) => ({
-						label: t.name,
-						value: String(t.id),
-					}))}
-					inputName="tags"
-					placeholder={t("art:forms.tags.searchExisting.placeholder")}
-					initialValue={null}
-					onChange={(selection) => {
-						if (!selection) return;
-						setTags([
-							...tags,
-							{ name: selection.label, id: Number(selection.value) },
-						]);
-					}}
+					tags={data.tags}
+					disabledKeys={tags.map((t) => t.id).filter((id) => id !== undefined)}
+					onSelectionChange={(tagName) =>
+						setTags([...tags, data.tags.find((t) => t.name === tagName)!])
+					}
 				/>
 			)}
 			<div className="text-sm stack sm flex-wrap horizontal">
@@ -430,12 +296,12 @@ function Tags() {
 					return (
 						<div key={t.name} className="stack horizontal">
 							{t.name}{" "}
-							<Button
+							<SendouButton
 								icon={<CrossIcon />}
-								size="tiny"
+								size="small"
 								variant="minimal-destructive"
 								className="art__delete-tag-button"
-								onClick={() => {
+								onPress={() => {
 									setTags(tags.filter((tag) => tag.name !== t.name));
 								}}
 							/>
@@ -472,9 +338,9 @@ function LinkedUsers() {
 				return (
 					<div key={inputId} className="stack horizontal sm mb-2 items-center">
 						<UserSearch
-							inputName="user"
+							name="user"
 							onChange={(newUser) => {
-								const newUsers = clone(users);
+								const newUsers = structuredClone(users);
 								newUsers[i] = { ...newUsers[i], userId: newUser.id };
 
 								setUsers(newUsers);
@@ -482,10 +348,10 @@ function LinkedUsers() {
 							initialUserId={userId}
 						/>
 						{users.length > 1 || users[0].userId ? (
-							<Button
-								size="tiny"
+							<SendouButton
+								size="small"
 								variant="minimal-destructive"
-								onClick={() => {
+								onPress={() => {
 									if (users.length === 1) {
 										setUsers([{ inputId: nanoid() }]);
 									} else {
@@ -498,15 +364,15 @@ function LinkedUsers() {
 					</div>
 				);
 			})}
-			<Button
-				size="tiny"
-				onClick={() => setUsers([...users, { inputId: nanoid() }])}
-				disabled={users.length >= ART.LINKED_USERS_MAX_LENGTH}
+			<SendouButton
+				size="small"
+				onPress={() => setUsers([...users, { inputId: nanoid() }])}
+				isDisabled={users.length >= ART.LINKED_USERS_MAX_LENGTH}
 				className="my-3"
 				variant="outlined"
 			>
 				{t("art:forms.linkedUsers.anotherOne")}
-			</Button>
+			</SendouButton>
 			<FormMessage type="info">{t("art:forms.linkedUsers.info")}</FormMessage>
 		</div>
 	);
@@ -517,15 +383,16 @@ function ShowcaseToggle() {
 	const data = useLoaderData<typeof loader>();
 	const isCurrentlyShowcase = Boolean(data.art?.isShowcase);
 	const [checked, setChecked] = React.useState(isCurrentlyShowcase);
+	const id = React.useId();
 
 	return (
 		<div>
-			<label htmlFor="isShowcase">{t("art:forms.showcase.title")}</label>
+			<label htmlFor={id}>{t("art:forms.showcase.title")}</label>
 			<SendouSwitch
 				isSelected={checked}
 				onChange={setChecked}
 				name="isShowcase"
-				id="isShowcase"
+				id={id}
 				isDisabled={isCurrentlyShowcase}
 			/>
 			<FormMessage type="info">{t("art:forms.showcase.info")}</FormMessage>

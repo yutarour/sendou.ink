@@ -1,10 +1,6 @@
-import clone from "just-clone";
-import type { MapPoolMap } from "~/db/types";
-import {
-	type ModeShort,
-	type StageId,
-	stageIds,
-} from "~/modules/in-game-lists";
+import type { Tables } from "~/db/tables";
+import { stageIds } from "~/modules/in-game-lists/stage-ids";
+import type { ModeShort, StageId } from "~/modules/in-game-lists/types";
 import { mapPoolListToMapPoolObject } from "./map-list-generator/utils";
 import {
 	mapPoolToSerializedString,
@@ -15,7 +11,9 @@ import type {
 	ReadonlyMapPoolObject,
 } from "./map-pool-serializer/types";
 
-export type DbMapPoolList = Array<Pick<MapPoolMap, "stageId" | "mode">>;
+export type DbMapPoolList = Array<
+	Pick<Tables["MapPoolMap"], "stageId" | "mode">
+>;
 
 export class MapPool {
 	private source: string | ReadonlyMapPoolObject;
@@ -108,8 +106,8 @@ export class MapPool {
 		return this.stageModePairs.length;
 	}
 
-	getClonedObject(): MapPoolObject {
-		return clone(this.parsed) as MapPoolObject;
+	getClonedObject() {
+		return structuredClone(this.parsed) as MapPoolObject;
 	}
 
 	toString() {

@@ -4,22 +4,19 @@ import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { Divider } from "~/components/Divider";
 import { ModeImage, StageImage } from "~/components/Image";
-import { SubmitButton } from "~/components/SubmitButton";
 import { CheckmarkIcon } from "~/components/icons/Checkmark";
 import { CrossIcon } from "~/components/icons/Cross";
+import { SubmitButton } from "~/components/SubmitButton";
 import type { TournamentRoundMaps } from "~/db/tables";
 import { useUser } from "~/features/auth/core/user";
 import { useTournament } from "~/features/tournament/routes/to.$id";
-import {
-	type ModeShort,
-	type StageId,
-	modesShort,
-} from "~/modules/in-game-lists";
+import { modesShort } from "~/modules/in-game-lists/modes";
+import type { ModeShort, StageId } from "~/modules/in-game-lists/types";
 import invariant from "~/utils/invariant";
 import { stageImageUrl } from "~/utils/urls";
 import * as PickBan from "../core/PickBan";
 import type { TournamentDataTeam } from "../core/Tournament.server";
-import type { TournamentMatchLoaderData } from "../routes/to.$id.matches.$mid";
+import type { TournamentMatchLoaderData } from "../loaders/to.$id.matches.$mid.server";
 
 export function MatchActionsBanPicker({
 	teams,
@@ -277,11 +274,9 @@ function CounterpickSubmitter({
 	if (picking && !selected) {
 		return (
 			<div className="mt-6 text-lighter text-sm text-center">
-				{pickBan === "BAN_2" ? (
-					<>Please select your team&apos;s ban above</>
-				) : (
-					<>Please select your team&apos;s counterpick above</>
-				)}
+				{pickBan === "BAN_2"
+					? "Please select your team's ban above"
+					: "Please select your team's counterpick above"}
 			</div>
 		);
 	}
@@ -295,7 +290,7 @@ function CounterpickSubmitter({
 					"text-warning": pickBan === "BAN_2",
 				})}
 			>
-				{pickBan === "BAN_2" ? <>Ban</> : <>Counterpick</>}:{" "}
+				{pickBan === "BAN_2" ? "Ban" : "Counterpick"}:{" "}
 				{t(`game-misc:MODE_SHORT_${selected.mode}`)}{" "}
 				{t(`game-misc:STAGE_${selected.stageId}`)}
 			</div>

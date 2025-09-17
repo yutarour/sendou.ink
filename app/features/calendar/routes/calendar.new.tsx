@@ -7,26 +7,23 @@ import { useTranslation } from "react-i18next";
 import type { AlertVariation } from "~/components/Alert";
 import { Alert } from "~/components/Alert";
 import { Badge } from "~/components/Badge";
-import { Button } from "~/components/Button";
 import { DateInput } from "~/components/DateInput";
 import { Divider } from "~/components/Divider";
+import { SendouButton } from "~/components/elements/Button";
 import { FormMessage } from "~/components/FormMessage";
 import { Input } from "~/components/Input";
+import { CrossIcon } from "~/components/icons/Cross";
+import { TrashIcon } from "~/components/icons/Trash";
 import { Label } from "~/components/Label";
 import { Main } from "~/components/Main";
 import { MapPoolSelector } from "~/components/MapPoolSelector";
 import { RequiredHiddenInput } from "~/components/RequiredHiddenInput";
 import { SubmitButton } from "~/components/SubmitButton";
-import { CrossIcon } from "~/components/icons/Cross";
-import { TrashIcon } from "~/components/icons/Trash";
-import type { Tables } from "~/db/tables";
-import type { Badge as BadgeType, CalendarEventTag } from "~/db/types";
-import { useUser } from "~/features/auth/core/user";
+import type { CalendarEventTag, Tables } from "~/db/tables";
 import { MapPool } from "~/features/map-list-generator/core/map-pool";
 import * as Progression from "~/features/tournament-bracket/core/Progression";
 import { useIsMounted } from "~/hooks/useIsMounted";
-import type { RankedModeShort } from "~/modules/in-game-lists";
-import { isDefined } from "~/utils/arrays";
+import type { RankedModeShort } from "~/modules/in-game-lists/types";
 import {
 	databaseTimestampToDate,
 	getDateAtNextFullHour,
@@ -35,7 +32,8 @@ import {
 import invariant from "~/utils/invariant";
 import type { SendouRouteHandle } from "~/utils/remix.server";
 import { pathnameFromPotentialURL } from "~/utils/strings";
-import { CREATING_TOURNAMENT_DOC_LINK, userSubmittedImage } from "~/utils/urls";
+import { CREATING_TOURNAMENT_DOC_LINK } from "~/utils/urls";
+import { userSubmittedImage } from "~/utils/urls-img";
 import {
 	CALENDAR_EVENT,
 	REG_CLOSES_AT_OPTIONS,
@@ -47,12 +45,12 @@ import {
 	datesToRegClosesAt,
 	regClosesAtToDisplayName,
 } from "../calendar-utils";
-import { canAddNewEvent } from "../calendar-utils";
 import { BracketProgressionSelector } from "../components/BracketProgressionSelector";
 import { Tags } from "../components/Tags";
 import "~/styles/calendar-new.css";
-import "~/styles/maps.css";
 import { SendouSwitch } from "~/components/elements/Switch";
+import { useHasRole } from "~/modules/permissions/hooks";
+import { logger } from "~/utils/logger";
 import { metaTags } from "~/utils/remix";
 import { action } from "../actions/calendar.new.server";
 import { loader } from "../loaders/calendar.new.server";
@@ -81,10 +79,11 @@ const useBaseEvent = () => {
 
 export default function CalendarNewEventPage() {
 	const baseEvent = useBaseEvent();
-	const user = useUser();
+	const isCalendarEventAdder = useHasRole("CALENDAR_EVENT_ADDER");
+	const isTournamentAdder = useHasRole("TOURNAMENT_ADDER");
 	const data = useLoaderData<typeof loader>();
 
-	if (!user || !canAddNewEvent(user)) {
+	if (!data.eventToEdit && !isCalendarEventAdder) {
 		return (
 			<Main className="stack items-center">
 				<Alert variation="WARNING">
@@ -94,7 +93,7 @@ export default function CalendarNewEventPage() {
 		);
 	}
 
-	if (data.isAddingTournament && !user.isTournamentOrganizer) {
+	if (!data.eventToEdit && data.isAddingTournament && !isTournamentAdder) {
 		return (
 			<Main className="stack items-center">
 				<Alert variation="WARNING">
@@ -160,7 +159,7 @@ function TemplateTournamentForm() {
 							</option>
 						))}
 					</select>
-					<SubmitButton disabled={!eventId}>Use template</SubmitButton>
+					<SubmitButton isDisabled={!eventId}>Use template</SubmitButton>
 				</Form>
 			</div>
 			<hr />
@@ -255,6 +254,7 @@ function EventForm() {
 						setIsInvitational={setIsInvitational}
 					/>
 					<StrictDeadlinesToggle />
+					{!eventToEdit ? <TestToggle /> : null}
 				</>
 			) : null}
 			{data.isAddingTournament ? (
@@ -279,14 +279,14 @@ function EventForm() {
 					/>
 				</div>
 			) : null}
-			<Button
+			<SendouButton
 				className="mt-4"
-				onClick={handleSubmit}
-				disabled={submitButtonDisabled()}
-				testId="submit-button"
+				onPress={handleSubmit}
+				isDisabled={submitButtonDisabled()}
+				data-testid="submit-button"
 			>
 				{t("actions.submit")}
-			</Button>
+			</SendouButton>
 		</Form>
 	);
 }
@@ -302,10 +302,12 @@ function NameInput() {
 			</Label>
 			<input
 				name="name"
+				id="name"
 				required
 				minLength={CALENDAR_EVENT.NAME_MIN_LENGTH}
 				maxLength={CALENDAR_EVENT.NAME_MAX_LENGTH}
 				defaultValue={eventToEdit?.name}
+				data-testid="calendar-event-name-input"
 			/>
 		</div>
 	);
@@ -406,9 +408,9 @@ function AddButton({ onAdd, id }: { onAdd: () => void; id?: string }) {
 	const { t } = useTranslation();
 
 	return (
-		<Button size="tiny" variant="outlined" onClick={onAdd} id={id}>
+		<SendouButton size="small" variant="outlined" onPress={onAdd} id={id}>
 			{t("actions.add")}
-		</Button>
+		</SendouButton>
 	);
 }
 
@@ -459,7 +461,7 @@ function DatesInput({ allowMultiDate }: { allowMultiDate?: boolean }) {
 			// .reverse() is mutating, but map/filter returns a new array anyway.
 			const lastValidDate = current
 				.map((e) => e.date)
-				.filter(isDefined)
+				.filter((date) => date !== null)
 				.reverse()[0];
 
 			const addedDate = lastValidDate
@@ -509,9 +511,9 @@ function DatesInput({ allowMultiDate }: { allowMultiDate?: boolean }) {
 									/>
 									{/* "Remove" button */}
 									{datesCount > 1 && (
-										<Button
-											size="tiny"
-											onClick={() => {
+										<SendouButton
+											size="small"
+											onPress={() => {
 												setDatesInputState((current) =>
 													current.filter((e) => e.key !== key),
 												);
@@ -519,8 +521,7 @@ function DatesInput({ allowMultiDate }: { allowMultiDate?: boolean }) {
 											aria-controls={`date-input-${key}`}
 											aria-label={t("common:actions.remove")}
 											aria-describedby={`date-input-${key}-label`}
-											title={t("common:actions.remove")}
-											icon={<CrossIcon />}
+											icon={<CrossIcon title={t("common:actions.remove")} />}
 											variant="minimal-destructive"
 										/>
 									)}
@@ -584,9 +585,9 @@ function TagsAdder() {
 	const [tags, setTags] = React.useState(baseEvent?.tags ?? []);
 	const id = React.useId();
 
-	const tagsForSelect = CALENDAR_EVENT.PERSISTED_TAGS.filter(
+	const tagsForSelect = CALENDAR_EVENT.TAGS.filter(
 		(tag) => !tags.includes(tag),
-	);
+	).filter((tag) => tag !== "SZ" && tag !== "TW"); // TODO: these are now added automatically, remove in migration?
 
 	return (
 		<div className="stack sm">
@@ -601,7 +602,6 @@ function TagsAdder() {
 					id={id}
 					className="calendar-new__select"
 					onChange={(e) =>
-						// @ts-expect-error TODO: fix this (5.5 version)
 						setTags([...tags, e.target.value as CalendarEventTag])
 					}
 				>
@@ -612,7 +612,6 @@ function TagsAdder() {
 						</option>
 					))}
 				</select>
-				<FormMessage type="info">{t("calendar:forms.tags.info")}</FormMessage>
 			</div>
 			<Tags
 				tags={tags}
@@ -641,7 +640,7 @@ function BadgesAdder() {
 
 	if (managedBadges.length === 0) return input;
 
-	const handleBadgeDelete = (badgeId: BadgeType["id"]) => {
+	const handleBadgeDelete = (badgeId: Tables["Badge"]["id"]) => {
 		setBadges(badges.filter((badge) => badge.id !== badgeId));
 	};
 
@@ -680,9 +679,9 @@ function BadgesAdder() {
 						<div className="stack horizontal md items-center" key={badge.id}>
 							<Badge badge={badge} isAnimated size={32} />
 							<span>{badge.displayName}</span>
-							<Button
+							<SendouButton
 								className="ml-auto"
-								onClick={() => handleBadgeDelete(badge.id)}
+								onPress={() => handleBadgeDelete(badge.id)}
 								icon={<TrashIcon />}
 								variant="minimal-destructive"
 								aria-label="Remove badge"
@@ -721,13 +720,13 @@ function AvatarImageInput({
 						alt=""
 						className="calendar-new__avatar-preview"
 					/>
-					<Button
+					<SendouButton
 						variant="outlined"
-						size="tiny"
-						onClick={() => setShowPrevious(false)}
+						size="small"
+						onPress={() => setShowPrevious(false)}
 					>
 						Edit logo
-					</Button>
+					</SendouButton>
 				</div>
 			</div>
 		);
@@ -766,7 +765,7 @@ function AvatarImageInput({
 							setAvatarImg(file);
 						},
 						error(err) {
-							console.error(err.message);
+							logger.error(err.message);
 						},
 					});
 				}}
@@ -785,14 +784,14 @@ function AvatarImageInput({
 				shown.
 			</FormMessage>
 			{hasPreviousAvatar && (
-				<Button
+				<SendouButton
 					variant="minimal-destructive"
-					size="tiny"
-					onClick={() => setShowPrevious(true)}
+					size="small"
+					onPress={() => setShowPrevious(true)}
 					className="mt-2"
 				>
 					Cancel changing avatar image
-				</Button>
+				</SendouButton>
 			)}
 		</div>
 	);
@@ -992,6 +991,33 @@ function StrictDeadlinesToggle() {
 	);
 }
 
+function TestToggle() {
+	const baseEvent = useBaseEvent();
+	const [isTest, setIsTest] = React.useState(
+		baseEvent?.tournament?.ctx.settings.isTest ?? false,
+	);
+	const id = React.useId();
+
+	return (
+		<div>
+			<label htmlFor={id} className="w-max">
+				Test
+			</label>
+			<SendouSwitch
+				name="isTest"
+				id={id}
+				size="small"
+				isSelected={isTest}
+				onChange={setIsTest}
+			/>
+			<FormMessage type="info">
+				Test tournaments don't appear on the calendar, don't send notifications
+				to players, and won't show up in players' profiles or results
+			</FormMessage>
+		</div>
+	);
+}
+
 function RegClosesAtSelect() {
 	const baseEvent = useBaseEvent();
 	const [regClosesAt, setRegClosesAt] = React.useState<RegClosesAtOption>(
@@ -1049,8 +1075,7 @@ const mapPickingStyleToShort: Record<
 function TournamentMapPickingStyleSelect() {
 	const { t } = useTranslation(["common"]);
 	const id = React.useId();
-	const { eventToEdit, recentEventsWithMapPools } =
-		useLoaderData<typeof loader>();
+	const { eventToEdit } = useLoaderData<typeof loader>();
 	const baseEvent = useBaseEvent();
 	const [mode, setMode] = React.useState<"ALL" | "TO" | RankedModeShort>(
 		baseEvent?.mapPickingStyle
@@ -1099,7 +1124,6 @@ function TournamentMapPickingStyleSelect() {
 						mapPool={mapPool}
 						title={t("common:maps.mapPool")}
 						handleMapPoolChange={setMapPool}
-						recentEvents={recentEventsWithMapPools}
 						allowBulkEdit
 					/>
 				</>
@@ -1112,7 +1136,6 @@ function MapPoolSection() {
 	const { t } = useTranslation(["game-misc", "common"]);
 
 	const baseEvent = useBaseEvent();
-	const { recentEventsWithMapPools } = useLoaderData<typeof loader>();
 	const [mapPool, setMapPool] = React.useState<MapPool>(
 		baseEvent?.mapPool ? new MapPool(baseEvent.mapPool) : MapPool.EMPTY,
 	);
@@ -1132,7 +1155,6 @@ function MapPoolSection() {
 				title={t("common:maps.mapPool")}
 				handleRemoval={() => setIncludeMapPool(false)}
 				handleMapPoolChange={setMapPool}
-				recentEvents={recentEventsWithMapPools}
 				allowBulkEdit
 			/>
 		</>

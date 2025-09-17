@@ -1,46 +1,48 @@
 import type { ActionFunction } from "@remix-run/node";
 import { sql } from "~/db/sql";
 import { requireUser } from "~/features/auth/core/user.server";
-import {
-	queryCurrentTeamRating,
-	queryCurrentUserRating,
-	queryCurrentUserSeedingRating,
-	queryTeamPlayerRatingAverage,
-} from "~/features/mmr/mmr-utils.server";
-import { currentSeason } from "~/features/mmr/season";
-import { refreshUserSkills } from "~/features/mmr/tiered.server";
+import * as ChatSystemMessage from "~/features/chat/ChatSystemMessage.server";
 import { notify } from "~/features/notifications/core/notify.server";
-import { tournamentIdFromParams } from "~/features/tournament";
-import * as Progression from "~/features/tournament-bracket/core/Progression";
-import * as TournamentRepository from "~/features/tournament/TournamentRepository.server";
 import { createSwissBracketInTransaction } from "~/features/tournament/queries/createSwissBracketInTransaction.server";
 import { updateRoundMaps } from "~/features/tournament/queries/updateRoundMaps.server";
+import * as TournamentRepository from "~/features/tournament/TournamentRepository.server";
+import * as Progression from "~/features/tournament-bracket/core/Progression";
 import invariant from "~/utils/invariant";
-import { logger } from "~/utils/logger";
-import { errorToastIfFalsy, parseRequestPayload } from "~/utils/remix.server";
+import {
+	errorToastIfErr,
+	errorToastIfFalsy,
+	parseParams,
+	parseRequestPayload,
+} from "~/utils/remix.server";
 import { assertUnreachable } from "~/utils/types";
+import { idObject } from "~/utils/zod";
 import type { PreparedMaps } from "../../../db/tables";
 import { updateTeamSeeds } from "../../tournament/queries/updateTeamSeeds.server";
+import { getServerTournamentManager } from "../core/brackets-manager/manager.server";
+import { roundMapsFromInput } from "../core/mapList.server";
 import * as Swiss from "../core/Swiss";
 import type { Tournament } from "../core/Tournament";
 import {
 	clearTournamentDataCache,
 	tournamentFromDB,
 } from "../core/Tournament.server";
-import { getServerTournamentManager } from "../core/brackets-manager/manager.server";
-import { roundMapsFromInput } from "../core/mapList.server";
-import { tournamentSummary } from "../core/summarizer.server";
-import { addSummary } from "../queries/addSummary.server";
-import { allMatchResultsByTournamentId } from "../queries/allMatchResultsByTournamentId.server";
 import { bracketSchema } from "../tournament-bracket-schemas.server";
-import { fillWithNullTillPowerOfTwo } from "../tournament-bracket-utils";
+import {
+	fillWithNullTillPowerOfTwo,
+	tournamentWebsocketRoom,
+} from "../tournament-bracket-utils";
 
 export const action: ActionFunction = async ({ params, request }) => {
 	const user = await requireUser(request);
-	const tournamentId = tournamentIdFromParams(params);
+	const { id: tournamentId } = parseParams({
+		params,
+		schema: idObject,
+	});
 	const tournament = await tournamentFromDB({ tournamentId, user });
 	const data = await parseRequestPayload({ request, schema: bracketSchema });
 	const manager = getServerTournamentManager();
+
+	let emitTournamentUpdate = false;
 
 	switch (data._action) {
 		case "START_BRACKET": {
@@ -50,7 +52,7 @@ export const action: ActionFunction = async ({ params, request }) => {
 			invariant(bracket, "Bracket not found");
 
 			const seeding = bracket.seeding;
-			invariant(seeding, "Seeding not found");
+			errorToastIfFalsy(seeding, "Bracket already started");
 
 			errorToastIfFalsy(
 				bracket.canBeStarted,
@@ -123,20 +125,24 @@ export const action: ActionFunction = async ({ params, request }) => {
 				}
 			})();
 
-			notify({
-				userIds: seeding.flatMap((tournamentTeamId) =>
-					tournament.teamById(tournamentTeamId)!.members.map((m) => m.userId),
-				),
-				notification: {
-					type: "TO_BRACKET_STARTED",
-					meta: {
-						tournamentId,
-						bracketIdx: data.bracketIdx,
-						bracketName: bracket.name,
-						tournamentName: tournament.ctx.name,
+			if (!tournament.isTest) {
+				notify({
+					userIds: seeding.flatMap((tournamentTeamId) =>
+						tournament.teamById(tournamentTeamId)!.members.map((m) => m.userId),
+					),
+					notification: {
+						type: "TO_BRACKET_STARTED",
+						meta: {
+							tournamentId,
+							bracketIdx: data.bracketIdx,
+							bracketName: bracket.name,
+							tournamentName: tournament.ctx.name,
+						},
 					},
-				},
-			});
+				});
+			}
+
+			emitTournamentUpdate = true;
 
 			break;
 		}
@@ -183,17 +189,17 @@ export const action: ActionFunction = async ({ params, request }) => {
 
 			const bracket = tournament.bracketByIdx(data.bracketIdx);
 			errorToastIfFalsy(bracket, "Bracket not found");
-			errorToastIfFalsy(
-				bracket.type === "swiss",
-				"Can't advance non-swiss bracket",
-			);
 
 			const matches = Swiss.generateMatchUps({
 				bracket,
 				groupId: data.groupId,
 			});
 
-			await TournamentRepository.insertSwissMatches(matches);
+			errorToastIfErr(matches);
+
+			await TournamentRepository.insertSwissMatches(matches.value);
+
+			emitTournamentUpdate = true;
 
 			break;
 		}
@@ -213,61 +219,7 @@ export const action: ActionFunction = async ({ params, request }) => {
 				roundId: data.roundId,
 			});
 
-			break;
-		}
-		case "FINALIZE_TOURNAMENT": {
-			errorToastIfFalsy(
-				tournament.canFinalize(user),
-				"Can't finalize tournament",
-			);
-
-			const _finalStandings = tournament.standings;
-
-			const results = allMatchResultsByTournamentId(tournamentId);
-			invariant(results.length > 0, "No results found");
-
-			const season = currentSeason(tournament.ctx.startTime)?.nth;
-
-			const seedingSkillCountsFor = tournament.skillCountsFor;
-			const summary = tournamentSummary({
-				teams: tournament.ctx.teams,
-				finalStandings: _finalStandings,
-				results,
-				calculateSeasonalStats: tournament.ranked,
-				queryCurrentTeamRating: (identifier) =>
-					queryCurrentTeamRating({ identifier, season: season! }).rating,
-				queryCurrentUserRating: (userId) =>
-					queryCurrentUserRating({ userId, season: season! }).rating,
-				queryTeamPlayerRatingAverage: (identifier) =>
-					queryTeamPlayerRatingAverage({
-						identifier,
-						season: season!,
-					}),
-				queryCurrentSeedingRating: (userId) =>
-					queryCurrentUserSeedingRating({
-						userId,
-						type: seedingSkillCountsFor!,
-					}),
-				seedingSkillCountsFor,
-			});
-
-			logger.info(
-				`Inserting tournament summary. Tournament id: ${tournamentId}, mapResultDeltas.lenght: ${summary.mapResultDeltas.length}, playerResultDeltas.length ${summary.playerResultDeltas.length}, tournamentResults.length ${summary.tournamentResults.length}, skills.length ${summary.skills.length}, seedingSkills.length ${summary.seedingSkills.length}`,
-			);
-
-			addSummary({
-				tournamentId,
-				summary,
-				season,
-			});
-
-			if (tournament.ranked) {
-				try {
-					refreshUserSkills(season!);
-				} catch (error) {
-					logger.warn("Error refreshing user skills", error);
-				}
-			}
+			emitTournamentUpdate = true;
 
 			break;
 		}
@@ -311,6 +263,9 @@ export const action: ActionFunction = async ({ params, request }) => {
 				destinationBracketIdx: data.destinationBracketIdx,
 				tournamentId,
 			});
+
+			emitTournamentUpdate = true;
+
 			break;
 		}
 		default: {
@@ -319,6 +274,16 @@ export const action: ActionFunction = async ({ params, request }) => {
 	}
 
 	clearTournamentDataCache(tournamentId);
+
+	if (emitTournamentUpdate) {
+		ChatSystemMessage.send([
+			{
+				room: tournamentWebsocketRoom(tournament.ctx.id),
+				type: "TOURNAMENT_UPDATED",
+				revalidateOnly: true,
+			},
+		]);
+	}
 
 	return null;
 };

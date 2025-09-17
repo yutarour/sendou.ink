@@ -1,16 +1,16 @@
 import { useSearchParams } from "@remix-run/react";
-import {
-	type Ability,
-	type AbilityWithUnknown,
-	type BuildAbilitiesTupleWithUnknown,
-	type MainWeaponId,
-	abilities,
-	isAbility,
-} from "~/modules/in-game-lists";
+import { abilities } from "~/modules/in-game-lists/abilities";
+import type {
+	Ability,
+	AbilityWithUnknown,
+	BuildAbilitiesTupleWithUnknown,
+	MainWeaponId,
+} from "~/modules/in-game-lists/types";
+import { isAbility } from "~/modules/in-game-lists/utils";
 import invariant from "~/utils/invariant";
 import { MAX_LDE_INTENSITY } from "./analyzer-constants";
 import type { SpecialEffectType } from "./analyzer-types";
-import { SPECIAL_EFFECTS, applySpecialEffects } from "./core/specialEffects";
+import { applySpecialEffects, SPECIAL_EFFECTS } from "./core/specialEffects";
 import { buildStats } from "./core/stats";
 import {
 	buildIsEmpty,
@@ -23,7 +23,7 @@ import {
 export function useAnalyzeBuild() {
 	const [searchParams, setSearchParams] = useSearchParams();
 
-	const mainWeaponId = validatedWeaponIdFromSearchParams(searchParams);
+	const mainWeaponId = validatedWeaponIdFromSearchParams(searchParams) ?? 0;
 	const build = validatedBuildFromSearchParams(searchParams);
 	const build2 = validatedBuildFromSearchParams(searchParams, "build2", build);
 	const ldeIntensity = validatedLdeIntensityFromSearchParams(searchParams);

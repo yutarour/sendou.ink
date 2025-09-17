@@ -1,11 +1,11 @@
 import * as TournamentRepository from "~/features/tournament/TournamentRepository.server";
 import { HACKY_resolvePicture } from "~/features/tournament/tournament-utils";
 import type { TournamentManagerDataSet } from "~/modules/brackets-manager/types";
-import { isAdmin } from "~/permissions";
+import { isAdmin } from "~/modules/permissions/utils";
 import { notFoundIfFalsy } from "~/utils/remix.server";
 import type { Unwrapped } from "~/utils/types";
-import { Tournament } from "./Tournament";
 import { getServerTournamentManager } from "./brackets-manager/manager.server";
+import { Tournament } from "./Tournament";
 
 const manager = getServerTournamentManager();
 

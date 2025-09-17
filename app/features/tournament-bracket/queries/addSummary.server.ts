@@ -1,7 +1,9 @@
 import { ordinal } from "openskill";
 import { sql } from "~/db/sql";
-import type { Skill } from "~/db/types";
+import type { Tables } from "~/db/tables";
 import { identifierToUserIds } from "~/features/mmr/mmr-utils";
+import type { TournamentBadgeReceivers } from "~/features/tournament-bracket/tournament-bracket-schemas.server";
+import { databaseTimestampNow } from "~/utils/dates";
 import type { TournamentSummary } from "../core/summarizer.server";
 
 const addSkillStm = sql.prepare(/* sql */ `
@@ -13,7 +15,8 @@ const addSkillStm = sql.prepare(/* sql */ `
     "userId",
     "identifier",
     "matchesCount",
-    "season"
+    "season",
+    "createdAt"
   )
   values (
     @tournamentId,
@@ -23,7 +26,8 @@ const addSkillStm = sql.prepare(/* sql */ `
     @userId,
     @identifier,
     @matchesCount + coalesce((select max("matchesCount") from "Skill" where "userId" = @userId or "identifier" = @identifier group by "userId", "identifier"), 0),
-    @season
+    @season,
+    @createdAt
   ) returning *
 `);
 
@@ -110,14 +114,36 @@ const addTournamentResultStm = sql.prepare(/* sql */ `
     "userId",
     "placement",
     "participantCount",
-    "tournamentTeamId"
+    "tournamentTeamId",
+    "setResults",
+    "spDiff"
   ) values (
     @tournamentId,
     @userId,
     @placement,
     @participantCount,
-    @tournamentTeamId
+    @tournamentTeamId,
+    @setResults,
+    @spDiff
   )
+`);
+
+const addTournamentBadgeOwnersStm = sql.prepare(/* sql */ `
+  insert into "TournamentBadgeOwner" (
+    "tournamentId",
+    "badgeId",
+    "userId"
+  ) values (
+    @tournamentId,
+    @badgeId,
+    @userId
+  )
+`);
+
+const finalizeTournamentStm = sql.prepare(/* sql */ `
+  update "Tournament" set
+    "isFinalized" = 1
+  where "id" = @tournamentId
 `);
 
 export const addSummary = sql.transaction(
@@ -125,10 +151,12 @@ export const addSummary = sql.transaction(
 		tournamentId,
 		summary,
 		season,
+		badgeReceivers = [],
 	}: {
 		tournamentId: number;
 		summary: TournamentSummary;
 		season?: number;
+		badgeReceivers?: TournamentBadgeReceivers;
 	}) => {
 		for (const skill of summary.skills) {
 			const insertedSkill = addSkillStm.get({
@@ -140,7 +168,8 @@ export const addSummary = sql.transaction(
 				identifier: skill.identifier ?? null,
 				matchesCount: skill.matchesCount,
 				season: season ?? null,
-			}) as Skill;
+				createdAt: databaseTimestampNow(),
+			}) as Tables["Skill"];
 
 			if (insertedSkill.identifier) {
 				for (const userId of identifierToUserIds(insertedSkill.identifier)) {
@@ -186,14 +215,37 @@ export const addSummary = sql.transaction(
 			});
 		}
 
+		for (const badgeReceiver of badgeReceivers) {
+			for (const userId of badgeReceiver.userIds) {
+				addTournamentBadgeOwnersStm.run({
+					tournamentId,
+					badgeId: badgeReceiver.badgeId,
+					userId,
+				});
+			}
+		}
+
 		for (const tournamentResult of summary.tournamentResults) {
+			const setResults = summary.setResults.get(tournamentResult.userId);
+
+			if (setResults?.every((result) => !result)) {
+				continue;
+			}
+
 			addTournamentResultStm.run({
 				tournamentId,
 				userId: tournamentResult.userId,
 				placement: tournamentResult.placement,
 				participantCount: tournamentResult.participantCount,
 				tournamentTeamId: tournamentResult.tournamentTeamId,
+				setResults: setResults ? JSON.stringify(setResults) : null,
+				spDiff: summary.spDiffs?.get(tournamentResult.userId) ?? null,
 			});
 		}
+
+		finalizeTournamentStm.run({ tournamentId });
 	},
 );
+
+export const finalizeTournament = (tournamentId: number) =>
+	finalizeTournamentStm.run({ tournamentId });

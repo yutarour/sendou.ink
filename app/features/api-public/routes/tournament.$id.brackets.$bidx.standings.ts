@@ -1,6 +1,6 @@
-import { type LoaderFunctionArgs, json } from "@remix-run/node";
+import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { cors } from "remix-utils/cors";
-import { z } from "zod";
+import { z } from "zod/v4";
 import { tournamentFromDB } from "~/features/tournament-bracket/core/Tournament.server";
 import { notFoundIfFalsy, parseParams } from "~/utils/remix.server";
 import { id } from "~/utils/zod";
@@ -27,6 +27,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 	});
 
 	const bracket = notFoundIfFalsy(tournament.bracketByIdx(bidx));
+	notFoundIfFalsy(!bracket.preview);
 
 	const result: GetTournamentBracketStandingsResponse = {
 		standings: bracket.standings.map((standing) => ({

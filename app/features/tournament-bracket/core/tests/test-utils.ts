@@ -1,5 +1,5 @@
+import * as R from "remeda";
 import type { TournamentManagerDataSet } from "~/modules/brackets-manager/types";
-import { removeDuplicates } from "~/utils/arrays";
 import type * as Progression from "../Progression";
 import { Tournament } from "../Tournament";
 import type { TournamentData } from "../Tournament.server";
@@ -32,7 +32,7 @@ export const tournamentCtxTeam = (
 const nTeams = (n: number, startingId: number) => {
 	const teams = [];
 	for (let i = 0; i < n; i++) {
-		teams.push(tournamentCtxTeam(i, tournamentCtxTeam(i + startingId)));
+		teams.push(tournamentCtxTeam(i + 1, tournamentCtxTeam(i + startingId)));
 	}
 	return teams;
 };
@@ -49,11 +49,12 @@ export const testTournament = ({
 	data?: TournamentManagerDataSet;
 	ctx?: Partial<TournamentData["ctx"]>;
 }) => {
-	const participant = removeDuplicates(
-		data.match
-			.flatMap((m) => [m.opponent1?.id, m.opponent2?.id])
-			.filter(Boolean),
-	) as number[];
+	const participant = R.pipe(
+		data.match,
+		R.flatMap((m) => [m.opponent1?.id, m.opponent2?.id]),
+		R.filter(R.isTruthy),
+		R.unique<number[]>,
+	);
 
 	return new Tournament({
 		data,

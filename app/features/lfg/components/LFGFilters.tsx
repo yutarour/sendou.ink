@@ -1,17 +1,19 @@
 import { useTranslation } from "react-i18next";
-import { Button } from "~/components/Button";
-import { WeaponCombobox } from "~/components/Combobox";
+import * as R from "remeda";
+import { SendouButton } from "~/components/elements/Button";
 import { WeaponImage } from "~/components/Image";
-import { Label } from "~/components/Label";
 import { CrossIcon } from "~/components/icons/Cross";
+import { Label } from "~/components/Label";
+import { WeaponSelect } from "~/components/WeaponSelect";
 import type { Tables } from "~/db/tables";
 import type { TierName } from "~/features/mmr/mmr-constants";
 import { TIERS } from "~/features/mmr/mmr-constants";
 import { languagesUnified } from "~/modules/i18n/config";
-import type { MainWeaponId } from "~/modules/in-game-lists";
-import { capitalize } from "~/utils/strings";
+import type { MainWeaponId } from "~/modules/in-game-lists/types";
 import { LFG } from "../lfg-constants";
 import type { LFGFilter } from "../lfg-types";
+
+import styles from "./LFGFilters.module.css";
 
 export function LFGFilters({
 	filters,
@@ -57,15 +59,15 @@ function Filter({
 				<Label>
 					{t(`lfg:filters.${filter._tag}`)} {t("lfg:filters.suffix")}
 				</Label>
-				<Button
+				<SendouButton
 					icon={<CrossIcon />}
-					size="tiny"
+					size="small"
 					variant="minimal-destructive"
-					onClick={removeFilter}
+					onPress={removeFilter}
 					aria-label="Delete filter"
 				/>
 			</div>
-			<div className="lfg__filter">
+			<div className={styles.filter}>
 				{filter._tag === "Weapon" && (
 					<WeaponFilterFields
 						value={filter.weaponSplIds}
@@ -121,26 +123,24 @@ function WeaponFilterFields({
 }) {
 	return (
 		<div className="stack horizontal sm flex-wrap">
-			<WeaponCombobox
-				inputName="weapon"
-				key={value.length}
-				weaponIdsToOmit={new Set(value)}
-				onChange={(wpn) =>
-					wpn &&
+			<WeaponSelect
+				disabledWeaponIds={value}
+				onChange={(weaponId) =>
 					changeFilter({
 						_tag: "Weapon",
 						weaponSplIds:
 							value.length >= 10
-								? [...value.slice(1, 10), Number(wpn.value) as MainWeaponId]
-								: [...value, Number(wpn.value) as MainWeaponId],
+								? [...value.slice(1, 10), weaponId]
+								: [...value, weaponId],
 					})
 				}
+				key={value.join("-")}
 			/>
 			{value.map((weapon) => (
-				<Button
+				<SendouButton
 					key={weapon}
 					variant="minimal"
-					onClick={() =>
+					onPress={() =>
 						changeFilter({
 							_tag: "Weapon",
 							weaponSplIds: value.filter((weaponId) => weaponId !== weapon),
@@ -148,7 +148,7 @@ function WeaponFilterFields({
 					}
 				>
 					<WeaponImage weaponSplId={weapon} size={32} variant="badge" />
-				</Button>
+				</SendouButton>
 			))}
 		</div>
 	);
@@ -285,7 +285,7 @@ function TierFilterFields({
 			>
 				{TIERS.map((tier) => (
 					<option key={tier.name} value={tier.name}>
-						{capitalize(tier.name.toLowerCase())}
+						{R.capitalize(tier.name.toLowerCase())}
 					</option>
 				))}
 			</select>

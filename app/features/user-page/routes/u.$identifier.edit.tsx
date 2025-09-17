@@ -1,264 +1,52 @@
-import {
-	type ActionFunction,
-	type LoaderFunctionArgs,
-	redirect,
-} from "@remix-run/node";
 import { Form, Link, useLoaderData, useMatches } from "@remix-run/react";
-import type { TCountryCode } from "countries-list";
-import { countries, getEmojiFlag } from "countries-list";
+import clsx from "clsx";
 import * as React from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { z } from "zod";
-import { Button } from "~/components/Button";
-import { WeaponCombobox } from "~/components/Combobox";
 import { CustomizedColorsInput } from "~/components/CustomizedColorsInput";
+import { SendouButton } from "~/components/elements/Button";
+import { SendouSelect, SendouSelectItem } from "~/components/elements/Select";
+import { SendouSwitch } from "~/components/elements/Switch";
 import { FormErrors } from "~/components/FormErrors";
 import { FormMessage } from "~/components/FormMessage";
 import { WeaponImage } from "~/components/Image";
 import { Input } from "~/components/Input";
-import { Label } from "~/components/Label";
-import { SubmitButton } from "~/components/SubmitButton";
 import { StarIcon } from "~/components/icons/Star";
 import { StarFilledIcon } from "~/components/icons/StarFilled";
 import { TrashIcon } from "~/components/icons/Trash";
-import { USER } from "~/constants";
-import type { User } from "~/db/types";
-import { useUser } from "~/features/auth/core/user";
-import { requireUser, requireUserId } from "~/features/auth/core/user.server";
-import * as TournamentTeamRepository from "~/features/tournament/TournamentTeamRepository.server";
-import * as UserRepository from "~/features/user-page/UserRepository.server";
-import { i18next } from "~/modules/i18n/i18next.server";
-import type { MainWeaponId } from "~/modules/in-game-lists";
-import { canAddCustomizedColorsToUserProfile } from "~/permissions";
-import { translatedCountry } from "~/utils/i18n.server";
+import { Label } from "~/components/Label";
+import { SubmitButton } from "~/components/SubmitButton";
+import { WeaponSelect } from "~/components/WeaponSelect";
+import type { Tables } from "~/db/tables";
+import { BADGE } from "~/features/badges/badges-constants";
+import { BadgesSelector } from "~/features/badges/components/BadgesSelector";
+import { useIsMounted } from "~/hooks/useIsMounted";
+import { useHasRole } from "~/modules/permissions/hooks";
+import { countryCodeToTranslatedName } from "~/utils/i18n";
 import invariant from "~/utils/invariant";
-import {
-	notFoundIfFalsy,
-	safeParseRequestFormData,
-} from "~/utils/remix.server";
-import { errorIsSqliteUniqueConstraintFailure } from "~/utils/sql";
 import { rawSensToString } from "~/utils/strings";
-import { FAQ_PAGE, isCustomUrl, userPage } from "~/utils/urls";
-import {
-	actualNumber,
-	actuallyNonEmptyStringOrNull,
-	checkboxValueToDbBoolean,
-	customCssVarObject,
-	dbBoolean,
-	falsyToNull,
-	id,
-	processMany,
-	safeJSONParse,
-	undefinedToNull,
-	weaponSplId,
-} from "~/utils/zod";
-import { userParamsSchema } from "../user-page-schemas.server";
-import type { UserPageLoaderData } from "./u.$identifier";
-import "~/styles/u-edit.css";
-import { SendouSwitch } from "~/components/elements/Switch";
-import { clearTournamentDataCache } from "~/features/tournament-bracket/core/Tournament.server";
+import { FAQ_PAGE } from "~/utils/urls";
+import { action } from "../actions/u.$identifier.edit.server";
+import { loader } from "../loaders/u.$identifier.edit.server";
+import type { UserPageLoaderData } from "../loaders/u.$identifier.server";
+import { COUNTRY_CODES, USER } from "../user-page-constants";
+export { loader, action };
 
-export const userEditActionSchema = z
-	.object({
-		country: z.preprocess(
-			falsyToNull,
-			z
-				.string()
-				.refine(
-					(val) => !val || Object.keys(countries).some((code) => val === code),
-				)
-				.nullable(),
-		),
-		bio: z.preprocess(
-			falsyToNull,
-			z.string().max(USER.BIO_MAX_LENGTH).nullable(),
-		),
-		customUrl: z.preprocess(
-			falsyToNull,
-			z
-				.string()
-				.max(USER.CUSTOM_URL_MAX_LENGTH)
-				.refine((val) => val === null || isCustomUrl(val), {
-					message: "forms.errors.invalidCustomUrl.numbers",
-				})
-				.refine((val) => val === null || /^[a-zA-Z0-9-_]+$/.test(val), {
-					message: "forms.errors.invalidCustomUrl.strangeCharacter",
-				})
-				.transform((val) => val?.toLowerCase())
-				.nullable(),
-		),
-		customName: z.preprocess(
-			actuallyNonEmptyStringOrNull,
-			z.string().max(USER.CUSTOM_NAME_MAX_LENGTH).nullable(),
-		),
-		battlefy: z.preprocess(
-			falsyToNull,
-			z.string().max(USER.BATTLEFY_MAX_LENGTH).nullable(),
-		),
-		stickSens: z.preprocess(
-			processMany(actualNumber, undefinedToNull),
-			z
-				.number()
-				.min(-50)
-				.max(50)
-				.refine((val) => val % 5 === 0)
-				.nullable(),
-		),
-		motionSens: z.preprocess(
-			processMany(actualNumber, undefinedToNull),
-			z
-				.number()
-				.min(-50)
-				.max(50)
-				.refine((val) => val % 5 === 0)
-				.nullable(),
-		),
-		inGameNameText: z.preprocess(
-			falsyToNull,
-			z.string().max(USER.IN_GAME_NAME_TEXT_MAX_LENGTH).nullable(),
-		),
-		inGameNameDiscriminator: z.preprocess(
-			falsyToNull,
-			z
-				.string()
-				.refine((val) => /^[0-9a-z]{4,5}$/.test(val))
-				.nullable(),
-		),
-		css: customCssVarObject,
-		weapons: z.preprocess(
-			safeJSONParse,
-			z
-				.array(
-					z.object({
-						weaponSplId,
-						isFavorite: dbBoolean,
-					}),
-				)
-				.max(USER.WEAPON_POOL_MAX_SIZE),
-		),
-		favoriteBadgeId: z.preprocess(
-			processMany(actualNumber, undefinedToNull),
-			id.nullable(),
-		),
-		showDiscordUniqueName: z.preprocess(checkboxValueToDbBoolean, dbBoolean),
-		commissionsOpen: z.preprocess(checkboxValueToDbBoolean, dbBoolean),
-		commissionText: z.preprocess(
-			falsyToNull,
-			z.string().max(USER.COMMISSION_TEXT_MAX_LENGTH).nullable(),
-		),
-	})
-	.refine(
-		(val) => {
-			if (val.motionSens !== null && val.stickSens === null) {
-				return false;
-			}
-
-			return true;
-		},
-		{
-			message: "forms.errors.invalidSens",
-		},
-	);
-
-export const action: ActionFunction = async ({ request }) => {
-	const parsedInput = await safeParseRequestFormData({
-		request,
-		schema: userEditActionSchema,
-	});
-
-	if (!parsedInput.success) {
-		return {
-			errors: parsedInput.errors,
-		};
-	}
-
-	const { inGameNameText, inGameNameDiscriminator, ...data } = parsedInput.data;
-
-	const user = await requireUserId(request);
-	const inGameName =
-		inGameNameText && inGameNameDiscriminator
-			? `${inGameNameText}#${inGameNameDiscriminator}`
-			: null;
-
-	try {
-		const editedUser = await UserRepository.updateProfile({
-			...data,
-			inGameName,
-			userId: user.id,
-		});
-
-		// TODO: to transaction
-		if (inGameName) {
-			const tournamentIdsAffected =
-				await TournamentTeamRepository.updateMemberInGameNameForNonStarted({
-					inGameName,
-					userId: user.id,
-				});
-
-			for (const tournamentId of tournamentIdsAffected) {
-				clearTournamentDataCache(tournamentId);
-			}
-		}
-
-		throw redirect(userPage(editedUser));
-	} catch (e) {
-		if (!errorIsSqliteUniqueConstraintFailure(e)) {
-			throw e;
-		}
-
-		return {
-			errors: ["forms.errors.invalidCustomUrl.duplicate"],
-		};
-	}
-};
-
-export const loader = async ({ request, params }: LoaderFunctionArgs) => {
-	const locale = await i18next.getLocale(request);
-
-	const user = await requireUser(request);
-	const { identifier } = userParamsSchema.parse(params);
-	const userToBeEdited = notFoundIfFalsy(
-		await UserRepository.findLayoutDataByIdentifier(identifier),
-	);
-	if (user.id !== userToBeEdited.id) {
-		throw redirect(userPage(userToBeEdited));
-	}
-
-	const userProfile = (await UserRepository.findProfileByIdentifier(
-		identifier,
-		true,
-	))!;
-
-	return {
-		user: userProfile,
-		favoriteBadgeId: user.favoriteBadgeId,
-		discordUniqueName: userProfile.discordUniqueName,
-		countries: Object.entries(countries)
-			.map(([code, country]) => ({
-				code,
-				emoji: getEmojiFlag(code as TCountryCode),
-				name:
-					translatedCountry({
-						countryCode: code,
-						language: locale,
-					}) ?? country.name,
-			}))
-			.sort((a, b) => a.name.localeCompare(b.name)),
-	};
-};
+import styles from "~/styles/u.$identifier.module.css";
 
 export default function UserEditPage() {
-	const user = useUser();
 	const { t } = useTranslation(["common", "user"]);
 	const [, parentRoute] = useMatches();
 	invariant(parentRoute);
 	const layoutData = parentRoute.data as UserPageLoaderData;
 	const data = useLoaderData<typeof loader>();
 
+	const isSupporter = useHasRole("SUPPORTER");
+	const isArtist = useHasRole("ARTIST");
+
 	return (
 		<div className="half-width">
-			<Form className="u-edit__container" method="post">
-				{canAddCustomizedColorsToUserProfile(user) ? (
+			<Form className={styles.container} method="post">
+				{isSupporter ? (
 					<CustomizedColorsInput initialColors={layoutData.css} />
 				) : null}
 				<CustomNameInput />
@@ -275,7 +63,7 @@ export default function UserEditPage() {
 				) : (
 					<input type="hidden" name="showDiscordUniqueName" value="on" />
 				)}
-				{user?.isArtist ? (
+				{isArtist ? (
 					<>
 						<CommissionsOpenToggle parentRouteData={layoutData} />
 						<CommissionTextArea initialValue={layoutData.user.commissionText} />
@@ -355,15 +143,15 @@ function InGameNameInputs() {
 			<Label>{t("user:ign")}</Label>
 			<div className="stack horizontal sm items-center">
 				<Input
-					className="u-edit__in-game-name-text"
+					className={styles.inGameNameText}
 					name="inGameNameText"
 					aria-label="In game name"
 					maxLength={USER.IN_GAME_NAME_TEXT_MAX_LENGTH}
 					defaultValue={inGameNameParts?.[0]}
 				/>
-				<div className="u-edit__in-game-name-hashtag">#</div>
+				<div className={styles.inGameNameHashtag}>#</div>
 				<Input
-					className="u-edit__in-game-name-discriminator"
+					className={styles.inGameNameDiscriminator}
 					name="inGameNameDiscriminator"
 					aria-label="In game name discriminator"
 					maxLength={USER.IN_GAME_NAME_DISCRIMINATOR_MAX_LENGTH}
@@ -391,7 +179,7 @@ function SensSelects() {
 					id="motionSens"
 					name="motionSens"
 					defaultValue={data.user.motionSens ?? undefined}
-					className="u-edit__sens-select"
+					className={styles.sensSelect}
 				>
 					<option value="">{"-"}</option>
 					{SENS_OPTIONS.map((sens) => (
@@ -408,7 +196,7 @@ function SensSelects() {
 					id="stickSens"
 					name="stickSens"
 					defaultValue={data.user.stickSens ?? undefined}
-					className="u-edit__sens-select"
+					className={styles.sensSelect}
 				>
 					<option value="">{"-"}</option>
 					{SENS_OPTIONS.map((sens) => (
@@ -423,26 +211,46 @@ function SensSelects() {
 }
 
 function CountrySelect() {
-	const { t } = useTranslation(["user"]);
+	const { t, i18n } = useTranslation(["user"]);
 	const data = useLoaderData<typeof loader>();
+	const isMounted = useIsMounted();
+	const [value, setValue] = React.useState(data.user.country ?? null);
+
+	// TODO: if react-aria-components start supporting "suppressHydrationWarning" it would likely be a better solution here
+	const items = COUNTRY_CODES.map((countryCode) => ({
+		name: isMounted
+			? countryCodeToTranslatedName({
+					countryCode,
+					language: i18n.language,
+				})
+			: countryCode,
+		id: countryCode,
+		key: countryCode,
+	})).sort((a, b) =>
+		a.name.localeCompare(b.name, i18n.language, { sensitivity: "base" }),
+	);
 
 	return (
-		<div>
-			<label htmlFor="country">{t("user:country")}</label>
-			<select
-				className="u-edit__country-select"
-				name="country"
-				id="country"
-				defaultValue={data.user.country ?? ""}
+		<>
+			{/* TODO: this is a workaround for clearable not working with uncontrolled values, in future the component should handle this one way or another */}
+			<input type="hidden" name="country" value={value ?? ""} />
+			<SendouSelect
+				items={items}
+				label={t("user:country")}
+				search={{
+					placeholder: t("user:forms.country.search.placeholder"),
+				}}
+				selectedKey={value}
+				onSelectionChange={(value) => setValue(value as string | null)}
+				clearable
 			>
-				<option value="" />
-				{data.countries.map((country) => (
-					<option key={country.code} value={country.code}>
-						{`${country.name} ${country.emoji}`}
-					</option>
-				))}
-			</select>
-		</div>
+				{({ key, ...item }) => (
+					<SendouSelectItem key={key} {...item}>
+						{item.name}
+					</SendouSelectItem>
+				)}
+			</SendouSelect>
+		</>
 	);
 }
 
@@ -473,35 +281,29 @@ function WeaponPoolSelect() {
 	const latestWeapon = weapons[weapons.length - 1];
 
 	return (
-		<div className="stack md u-edit__weapon-pool">
+		<div className={clsx("stack md", styles.weaponPool)}>
 			<input type="hidden" name="weapons" value={JSON.stringify(weapons)} />
-			<div>
-				<label htmlFor="weapon">{t("user:weaponPool")}</label>
-				{weapons.length < USER.WEAPON_POOL_MAX_SIZE ? (
-					<WeaponCombobox
-						inputName="weapon"
-						id="weapon"
-						onChange={(weapon) => {
-							if (!weapon) return;
-							setWeapons([
-								...weapons,
-								{
-									weaponSplId: Number(weapon.value) as MainWeaponId,
-									isFavorite: 0,
-								},
-							]);
-						}}
-						// empty on selection
-						key={latestWeapon?.weaponSplId ?? "empty"}
-						weaponIdsToOmit={new Set(weapons.map((w) => w.weaponSplId))}
-						fullWidth
-					/>
-				) : (
-					<span className="text-xs text-warning">
-						{t("user:forms.errors.maxWeapons")}
-					</span>
-				)}
-			</div>
+			{weapons.length < USER.WEAPON_POOL_MAX_SIZE ? (
+				<WeaponSelect
+					label={t("user:weaponPool")}
+					onChange={(weaponSplId) => {
+						setWeapons([
+							...weapons,
+							{
+								weaponSplId,
+								isFavorite: 0,
+							},
+						]);
+					}}
+					disabledWeaponIds={weapons.map((w) => w.weaponSplId)}
+					// empty on selection
+					key={latestWeapon?.weaponSplId ?? "empty"}
+				/>
+			) : (
+				<span className="text-xs text-warning">
+					{t("user:forms.errors.maxWeapons")}
+				</span>
+			)}
 			<div className="stack horizontal sm justify-center">
 				{weapons.map((weapon) => {
 					return (
@@ -515,11 +317,11 @@ function WeaponPoolSelect() {
 								/>
 							</div>
 							<div className="stack sm horizontal items-center justify-center">
-								<Button
+								<SendouButton
 									icon={weapon.isFavorite ? <StarFilledIcon /> : <StarIcon />}
 									variant="minimal"
 									aria-label="Favorite weapon"
-									onClick={() =>
+									onPress={() =>
 										setWeapons(
 											weapons.map((w) =>
 												w.weaponSplId === weapon.weaponSplId
@@ -532,19 +334,19 @@ function WeaponPoolSelect() {
 										)
 									}
 								/>
-								<Button
+								<SendouButton
 									icon={<TrashIcon />}
 									variant="minimal-destructive"
 									aria-label="Delete weapon"
-									onClick={() =>
+									onPress={() =>
 										setWeapons(
 											weapons.filter(
 												(w) => w.weaponSplId !== weapon.weaponSplId,
 											),
 										)
 									}
-									testId={`delete-weapon-${weapon.weaponSplId}`}
-									size="tiny"
+									data-testid={`delete-weapon-${weapon.weaponSplId}`}
+									size="small"
 								/>
 							</div>
 						</div>
@@ -555,12 +357,16 @@ function WeaponPoolSelect() {
 	);
 }
 
-function BioTextarea({ initialValue }: { initialValue: User["bio"] }) {
+function BioTextarea({
+	initialValue,
+}: {
+	initialValue: Tables["User"]["bio"];
+}) {
 	const { t } = useTranslation("user");
 	const [value, setValue] = React.useState(initialValue ?? "");
 
 	return (
-		<div className="u-edit__bio-container">
+		<div className={styles.bioContainer}>
 			<Label
 				htmlFor="bio"
 				valueLimits={{ current: value.length, max: USER.BIO_MAX_LENGTH }}
@@ -581,34 +387,43 @@ function BioTextarea({ initialValue }: { initialValue: User["bio"] }) {
 function FavBadgeSelect() {
 	const data = useLoaderData<typeof loader>();
 	const { t } = useTranslation(["user"]);
+	const [value, setValue] = React.useState(data.favoriteBadgeIds ?? []);
+	const isSupporter = useHasRole("SUPPORTER");
 
 	// doesn't make sense to select favorite badge
 	// if user has no badges or only has 1 badge
 	if (data.user.badges.length < 2) return null;
 
-	// user's current favorite badge is the initial value
-	const initialBadge = data.user.badges.find(
-		(badge) => badge.id === data.favoriteBadgeId,
-	);
+	const onChange = (newBadges: number[]) => {
+		if (isSupporter) {
+			setValue(newBadges);
+		} else {
+			// non-supporters can only set which badge is the big one
+			setValue(newBadges.length > 0 ? [newBadges[0]] : []);
+		}
+	};
 
 	return (
 		<div>
-			<label htmlFor="favoriteBadgeId">{t("user:favoriteBadge")}</label>
-			<select
-				className=""
-				name="favoriteBadgeId"
-				id="favoriteBadgeId"
-				defaultValue={initialBadge?.id}
+			<input
+				type="hidden"
+				name="favoriteBadgeIds"
+				value={JSON.stringify(value)}
+			/>
+			<label htmlFor="favoriteBadgeIds">{t("user:favoriteBadges")}</label>
+			<BadgesSelector
+				options={data.user.badges}
+				selectedBadges={value}
+				onChange={onChange}
+				maxCount={BADGE.SMALL_BADGES_PER_DISPLAY_PAGE + 1}
+				showSelect={isSupporter || value.length === 0}
 			>
-				{data.user.badges.map((badge) => (
-					<option key={badge.id} value={badge.id}>
-						{`${badge.displayName}`}
-					</option>
-				))}
-			</select>
-			<FormMessage type="info">
-				{t("user:forms.info.favoriteBadge")}
-			</FormMessage>
+				{!isSupporter ? (
+					<div className="text-sm text-lighter font-semi-bold text-center">
+						{t("user:forms.favoriteBadges.nonSupporter")}
+					</div>
+				) : null}
+			</BadgesSelector>
 		</div>
 	);
 }
@@ -664,13 +479,13 @@ function CommissionsOpenToggle({
 function CommissionTextArea({
 	initialValue,
 }: {
-	initialValue: User["commissionText"];
+	initialValue: Tables["User"]["commissionText"];
 }) {
 	const { t } = useTranslation(["user"]);
 	const [value, setValue] = React.useState(initialValue ?? "");
 
 	return (
-		<div className="u-edit__bio-container">
+		<div className={styles.bioContainer}>
 			<Label
 				htmlFor="commissionText"
 				valueLimits={{

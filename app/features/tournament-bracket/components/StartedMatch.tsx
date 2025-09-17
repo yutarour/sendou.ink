@@ -4,21 +4,27 @@ import clsx from "clsx";
 import type { TFunction } from "i18next";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { Image } from "~/components/Image";
-import { NewTabs } from "~/components/NewTabs";
-import { SubmitButton } from "~/components/SubmitButton";
 import { SendouButton } from "~/components/elements/Button";
 import { SendouPopover } from "~/components/elements/Popover";
+import {
+	SendouTab,
+	SendouTabList,
+	SendouTabPanel,
+	SendouTabs,
+} from "~/components/elements/Tabs";
+import { Image } from "~/components/Image";
 import { CheckmarkIcon } from "~/components/icons/Checkmark";
 import { CrossIcon } from "~/components/icons/Cross";
 import { PickIcon } from "~/components/icons/Pick";
+import { SubmitButton } from "~/components/SubmitButton";
 import { useUser } from "~/features/auth/core/user";
-import { Chat, useChat } from "~/features/chat/components/Chat";
+import { useChat } from "~/features/chat/chat-hooks";
+import { Chat } from "~/features/chat/components/Chat";
 import { useTournament } from "~/features/tournament/routes/to.$id";
 import { resolveLeagueRoundStartDate } from "~/features/tournament/tournament-utils";
 import { useIsMounted } from "~/hooks/useIsMounted";
 import { useSearchParamState } from "~/hooks/useSearchParamState";
-import type { StageId } from "~/modules/in-game-lists";
+import type { StageId } from "~/modules/in-game-lists/types";
 import { SPLATTERCOLOR_SCREEN_ID } from "~/modules/in-game-lists/weapon-ids";
 import type { TournamentMapListMap } from "~/modules/tournament-map-list-generator";
 import { nullFilledArray } from "~/utils/arrays";
@@ -32,7 +38,7 @@ import {
 import type { Bracket } from "../core/Bracket";
 import * as PickBan from "../core/PickBan";
 import type { TournamentDataTeam } from "../core/Tournament.server";
-import type { TournamentMatchLoaderData } from "../routes/to.$id.matches.$mid";
+import type { TournamentMatchLoaderData } from "../loaders/to.$id.matches.$mid.server";
 import {
 	groupNumberToLetters,
 	mapCountPlayedInSetWithCertainty,
@@ -113,6 +119,12 @@ export function StartedMatch({
 		});
 	}, [tournament, hostingTeamId, data.match.id]);
 
+	// using team ids as the seed to ensure grand finals and bracket reset have the same room pass
+	const roomPassSeed = [data.match.opponentOne?.id, data.match.opponentOne?.id]
+		.filter((value) => typeof value === "number")
+		.sort((a, b) => a - b)
+		.join("-");
+
 	const roundInfos = [
 		showFullInfos ? (
 			<React.Fragment key="hosts">
@@ -125,7 +137,7 @@ export function StartedMatch({
 			<React.Fragment key="pass">
 				{t("tournament:match.pass")}{" "}
 				<span className="text-theme font-bold" data-testid="room-pass">
-					{resolveRoomPass(data.match.id)}
+					{resolveRoomPass(roomPassSeed)}
 				</span>
 			</React.Fragment>
 		) : null,
@@ -579,12 +591,14 @@ function StartedMatchTabs({
 	const data = useLoaderData<TournamentMatchLoaderData>();
 	const [_unseenMessages, setUnseenMessages] = React.useState(0);
 	const [chatVisible, setChatVisible] = React.useState(false);
-	const [selectedTabIndex, setSelectedTabIndex] = useSearchParamState({
-		defaultValue: 0,
+	const [selectedTabKey, setSelectedTabKey] = useSearchParamState({
+		defaultValue: "rosters",
 		name: "tab",
-		revive: (value) => [0, 1, 2].find((idx) => idx === Number(value)),
+		revive: (value) =>
+			["chat", "rosters", "actions"].includes(value) ? value : null,
 	});
 
+	// TODO: resolve this on server (notice it is copy-pasted now)
 	const chatUsers = React.useMemo(() => {
 		return Object.fromEntries(
 			[
@@ -612,7 +626,10 @@ function StartedMatchTabs({
 		}
 		const oneMonthAgo = new Date();
 		oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-		if (tournament.ctx.startTime < oneMonthAgo) {
+		if (
+			tournament.ctx.startTime < oneMonthAgo &&
+			!tournament.isLeagueDivision
+		) {
 			return false;
 		}
 
@@ -673,70 +690,62 @@ function StartedMatchTabs({
 
 	return (
 		<ActionSectionWrapper>
-			<NewTabs
-				tabs={[
-					{
-						label: "Chat",
-						number: unseenMessages,
-						hidden: !showChat,
-					},
-					{
-						label: "Rosters",
-					},
-					{
-						label: presentational ? "Score" : "Actions",
-					},
-				]}
-				disappearing
-				content={[
-					{
-						key: "chat",
-						hidden: !showChat,
-						element: (
-							<>
-								{showChat ? (
-									<Chat
-										rooms={rooms}
-										users={chatUsers}
-										className="w-full q__chat-container"
-										messagesContainerClassName="q__chat-messages-container"
-										chat={chat}
-										onMount={onChatMount}
-										onUnmount={onChatUnmount}
-										missingUserName="???"
-									/>
-								) : null}
-							</>
-						),
-					},
-					{
-						key: "rosters",
-						element: <MatchRosters teams={[teams[0].id, teams[1].id]} />,
-					},
-					{
-						key: "report",
-						unmount: false,
-						element: (
-							<MatchActions
-								// Without the key prop when switching to another match the winnerId is remembered
-								// which causes "No winning team matching the id" error.
-								// In addition we want the active roster changing either by the user or by another user
-								// to reset the state inside. We also want to clear the inputs when a result is submitted
-								key={matchActionsKey()}
-								scores={scores}
-								teams={teams}
-								position={currentPosition}
-								result={result}
-								presentational={
-									!tournament.canReportScore({ matchId: data.match.id, user })
-								}
-							/>
-						),
-					},
-				]}
-				selectedIndex={selectedTabIndex}
-				setSelectedIndex={setSelectedTabIndex}
-			/>
+			<SendouTabs
+				selectedKey={selectedTabKey}
+				onSelectionChange={(key) => setSelectedTabKey(String(key))}
+			>
+				<SendouTabList>
+					{showChat && (
+						<SendouTab id="chat" number={unseenMessages} data-testid="chat-tab">
+							Chat
+						</SendouTab>
+					)}
+					<SendouTab id="rosters">Rosters</SendouTab>
+					<SendouTab id="actions" data-testid="actions-tab">
+						{presentational ? "Score" : "Actions"}
+					</SendouTab>
+				</SendouTabList>
+
+				<SendouTabPanel id="chat">
+					<Chat
+						rooms={rooms}
+						users={chatUsers}
+						className="tournament__chat-container"
+						messagesContainerClassName="tournament__chat-messages-container pt-0"
+						chat={chat}
+						onMount={onChatMount}
+						onUnmount={onChatUnmount}
+						missingUserName="???"
+					/>
+				</SendouTabPanel>
+
+				<SendouTabPanel id="rosters">
+					<MatchRosters teams={[teams[0].id, teams[1].id]} />
+				</SendouTabPanel>
+
+				<SendouTabPanel
+					id="actions"
+					shouldForceMount
+					className={clsx({
+						hidden: selectedTabKey !== "actions",
+					})}
+				>
+					<MatchActions
+						// Without the key prop when switching to another match the winnerId is remembered
+						// which causes "No winning team matching the id" error.
+						// In addition we want the active roster changing either by the user or by another user
+						// to reset the state inside. We also want to clear the inputs when a result is submitted
+						key={matchActionsKey()}
+						scores={scores}
+						teams={teams}
+						position={currentPosition}
+						result={result}
+						presentational={
+							!tournament.canReportScore({ matchId: data.match.id, user })
+						}
+					/>
+				</SendouTabPanel>
+			</SendouTabs>
 		</ActionSectionWrapper>
 	);
 }

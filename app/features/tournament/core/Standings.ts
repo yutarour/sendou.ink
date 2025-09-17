@@ -1,9 +1,9 @@
+import * as R from "remeda";
 import type { Standing } from "~/features/tournament-bracket/core/Bracket";
 import * as Progression from "~/features/tournament-bracket/core/Progression";
 import type { Tournament } from "~/features/tournament-bracket/core/Tournament";
-import { removeDuplicates } from "~/utils/arrays";
 
-/** Calculates SPR (Seed Performance Rating) - see https://www.pgstats.com/articles/introducing-spr-and-uf */
+/** Calculates SPR (Seed Performance Rating) - see https://web.archive.org/web/20250513034545/https://www.pgstats.com/articles/introducing-spr-and-uf */
 export function calculateSPR({
 	standings,
 	teamId,
@@ -11,7 +11,7 @@ export function calculateSPR({
 	standings: Standing[];
 	teamId: number;
 }) {
-	const uniquePlacements = removeDuplicates(
+	const uniquePlacements = R.unique(
 		standings.map((standing) => standing.placement),
 	).sort((a, b) => a - b);
 
@@ -41,7 +41,10 @@ export function calculateSPR({
 export function matchesPlayed({
 	tournament,
 	teamId,
-}: { tournament: Tournament; teamId: number }) {
+}: {
+	tournament: Tournament;
+	teamId: number;
+}) {
 	const brackets = Progression.bracketIdxsForStandings(
 		tournament.ctx.settings.bracketProgression,
 	)
@@ -83,6 +86,13 @@ export function matchesPlayed({
 	});
 }
 
+/**
+ * Computes the standings for a given tournament by aggregating results from relevant brackets.
+ *
+ * For example if the tournament format is round robin (where 2 out of 4 teams per group advance) to single elimination,
+ * the top teams are decided by the single elimination bracket, and the teams who failed to make the bracket are ordered
+ * by their performance in the round robin group stage.
+ */
 export function tournamentStandings(tournament: Tournament): Standing[] {
 	const bracketIdxs = Progression.bracketIdxsForStandings(
 		tournament.ctx.settings.bracketProgression,
@@ -104,7 +114,7 @@ export function tournamentStandings(tournament: Tournament): Standing[] {
 		const standings = standingsToMergeable({
 			alreadyIncludedTeamIds,
 			standings: bracket.standings,
-			teamsAboveCount: alreadyIncludedTeamIds.size,
+			teamsAboveFromAnotherBracketsCount: alreadyIncludedTeamIds.size,
 		});
 		result.push(...standings);
 
@@ -124,11 +134,11 @@ function standingsToMergeable<
 >({
 	alreadyIncludedTeamIds,
 	standings,
-	teamsAboveCount,
+	teamsAboveFromAnotherBracketsCount,
 }: {
 	alreadyIncludedTeamIds: Set<number>;
 	standings: T[];
-	teamsAboveCount: number;
+	teamsAboveFromAnotherBracketsCount: number;
 }) {
 	const result: T[] = [];
 
@@ -136,17 +146,24 @@ function standingsToMergeable<
 		(standing) => !alreadyIncludedTeamIds.has(standing.team.id),
 	);
 
-	let placement = teamsAboveCount + 1;
+	// e.g. if standings start at 3rd place, this must mean there is 2 teams left to finish _this_ bracket
+	const unfinishedTeamsCount = (standings.at(0)?.placement ?? 1) - 1;
+
+	let placement = 1;
 
 	for (const [i, standing] of filtered.entries()) {
 		const placementChanged =
 			i !== 0 && standing.placement !== filtered[i - 1].placement;
 
 		if (placementChanged) {
-			placement = teamsAboveCount + i + 1;
+			placement = i + 1;
 		}
 
-		result.push({ ...standing, placement });
+		result.push({
+			...standing,
+			placement:
+				placement + teamsAboveFromAnotherBracketsCount + unfinishedTeamsCount,
+		});
 	}
 
 	return result;

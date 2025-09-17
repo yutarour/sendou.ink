@@ -1,41 +1,35 @@
 import type { MetaFunction } from "@remix-run/node";
-import {
-	Form,
-	Link,
-	useLoaderData,
-	useNavigate,
-	useSearchParams,
-} from "@remix-run/react";
+import { Form, Link, useLoaderData, useSearchParams } from "@remix-run/react";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
+import { AddNewButton } from "~/components/AddNewButton";
 import { Alert } from "~/components/Alert";
-import { Button } from "~/components/Button";
-import { Dialog } from "~/components/Dialog";
+import { SendouDialog } from "~/components/elements/Dialog";
 import { FormErrors } from "~/components/FormErrors";
 import { Input } from "~/components/Input";
+import { SearchIcon } from "~/components/icons/Search";
 import { Main } from "~/components/Main";
 import { Pagination } from "~/components/Pagination";
 import { SubmitButton } from "~/components/SubmitButton";
-import { SearchIcon } from "~/components/icons/Search";
 import { useUser } from "~/features/auth/core/user";
 import { usePagination } from "~/hooks/usePagination";
+import { useHasRole } from "~/modules/permissions/hooks";
 import { joinListToNaturalString } from "~/utils/arrays";
 import { metaTags } from "~/utils/remix";
 import type { SendouRouteHandle } from "~/utils/remix.server";
 import {
-	TEAM_SEARCH_PAGE,
+	NEW_TEAM_PAGE,
 	navIconUrl,
+	TEAM_SEARCH_PAGE,
 	teamPage,
-	userSubmittedImage,
 } from "~/utils/urls";
-import { isAtLeastFiveDollarTierPatreon } from "~/utils/users";
-import { TEAM, TEAMS_PER_PAGE } from "../team-constants";
-
-import "../team.css";
-
+import { userSubmittedImage } from "~/utils/urls-img";
 import { action } from "../actions/t.server";
 import { loader } from "../loaders/t.server";
+import { TEAM, TEAMS_PER_PAGE } from "../team-constants";
 export { loader, action };
+
+import "../team.css";
 
 export const meta: MetaFunction = (args) => {
 	return metaTags({
@@ -94,14 +88,17 @@ export default function TeamSearchPage() {
 	return (
 		<Main className="stack lg">
 			<NewTeamDialog />
-			<Input
-				className="team-search__input"
-				icon={<SearchIcon className="team-search__icon" />}
-				value={inputValue}
-				onChange={(e) => setInputValue(e.target.value)}
-				placeholder={t("team:teamSearch.placeholder")}
-				testId="team-search-input"
-			/>
+			<div className="stack sm horizontal justify-between">
+				<Input
+					className="team-search__input"
+					icon={<SearchIcon className="team-search__icon" />}
+					value={inputValue}
+					onChange={(e) => setInputValue(e.target.value)}
+					placeholder={t("team:teamSearch.placeholder")}
+					testId="team-search-input"
+				/>
+				<AddNewButton navIcon="t" to={NEW_TEAM_PAGE} />
+			</div>
 			<div className="mt-6 stack lg">
 				{itemsToDisplay.map((team, i) => (
 					<Link
@@ -157,19 +154,16 @@ export default function TeamSearchPage() {
 
 function NewTeamDialog() {
 	const { t } = useTranslation(["common", "team"]);
-	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
 	const user = useUser();
+	const isSupporter = useHasRole("SUPPORTER");
 	const data = useLoaderData<typeof loader>();
 
 	const isOpen = searchParams.get("new") === "true";
 
-	const close = () => navigate(TEAM_SEARCH_PAGE);
-
 	const canAddNewTeam = () => {
 		if (!user) return false;
-
-		if (isAtLeastFiveDollarTierPatreon(user)) {
+		if (isSupporter) {
 			return data.teamMemberOfCount < TEAM.MAX_TEAM_COUNT_PATRON;
 		}
 
@@ -186,10 +180,13 @@ function NewTeamDialog() {
 	}
 
 	return (
-		<Dialog isOpen={isOpen} close={close} className="text-center">
+		<SendouDialog
+			heading={t("team:newTeam.header")}
+			isOpen={isOpen}
+			onCloseTo={TEAM_SEARCH_PAGE}
+		>
 			<Form method="post" className="stack md">
-				<h2 className="text-sm">{t("team:newTeam.header")}</h2>
-				<div className="team-search__form-input-container">
+				<div className="">
 					<label htmlFor="name">{t("common:forms.name")}</label>
 					<input
 						id="name"
@@ -201,13 +198,10 @@ function NewTeamDialog() {
 					/>
 				</div>
 				<FormErrors namespace="team" />
-				<div className="stack horizontal md justify-center mt-4">
+				<div className="mt-2">
 					<SubmitButton>{t("common:actions.create")}</SubmitButton>
-					<Button variant="destructive" onClick={close}>
-						{t("common:actions.cancel")}
-					</Button>
 				</div>
 			</Form>
-		</Dialog>
+		</SendouDialog>
 	);
 }

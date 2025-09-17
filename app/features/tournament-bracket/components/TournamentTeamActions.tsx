@@ -2,15 +2,19 @@ import { useFetcher } from "@remix-run/react";
 import clsx from "clsx";
 import { sub } from "date-fns";
 import * as React from "react";
-import { LinkButton } from "~/components/Button";
-import { SubmitButton } from "~/components/SubmitButton";
-import { SendouButton } from "~/components/elements/Button";
+import { LinkButton, SendouButton } from "~/components/elements/Button";
 import { SendouPopover } from "~/components/elements/Popover";
 import { CheckmarkIcon } from "~/components/icons/Checkmark";
+import { SubmitButton } from "~/components/SubmitButton";
 import { useUser } from "~/features/auth/core/user";
+import { soundEnabled, soundVolume } from "~/features/chat/chat-utils";
 import { useTournament } from "~/features/tournament/routes/to.$id";
 import { logger } from "~/utils/logger";
-import { tournamentMatchPage, tournamentRegisterPage } from "~/utils/urls";
+import {
+	soundPath,
+	tournamentMatchPage,
+	tournamentRegisterPage,
+} from "~/utils/urls";
 
 export function TournamentTeamActions() {
 	const tournament = useTournament();
@@ -18,6 +22,8 @@ export function TournamentTeamActions() {
 	const fetcher = useFetcher();
 
 	const status = tournament.teamMemberOfProgressStatus(user);
+
+	useMatchReadySound(status?.type);
 
 	if (!status) return null;
 
@@ -31,7 +37,7 @@ export function TournamentTeamActions() {
 						matchId: status.matchId,
 					})}
 					variant="minimal"
-					size="tiny"
+					size="small"
 				>
 					Go to match
 				</LinkButton>
@@ -52,7 +58,7 @@ export function TournamentTeamActions() {
 						<input type="hidden" name="bracketIdx" value={status.bracketIdx} />
 						{status.canCheckIn ? (
 							<SubmitButton
-								size="tiny"
+								size="small"
 								variant="minimal"
 								_action="CHECK_IN"
 								state={fetcher.state}
@@ -85,7 +91,7 @@ export function TournamentTeamActions() {
 					<fetcher.Form method="post">
 						<input type="hidden" name="bracketIdx" value={status.bracketIdx} />
 						<SubmitButton
-							size="tiny"
+							size="small"
 							variant="minimal"
 							_action="BRACKET_CHECK_IN"
 							state={fetcher.state}
@@ -199,4 +205,26 @@ function Dots() {
 			..<span className={clsx({ invisible: !thirdVisible })}>.</span>
 		</span>
 	);
+}
+
+function useMatchReadySound(statusType?: string) {
+	const isWaiting = React.useRef(false);
+
+	React.useEffect(() => {
+		if (statusType === "MATCH" && isWaiting.current) {
+			const sound = "tournament_match";
+
+			if (soundEnabled(sound)) {
+				const audio = new Audio(soundPath(sound));
+				audio.volume = soundVolume() / 100;
+				void audio
+					.play()
+					.catch((e) => logger.error(`Couldn't play sound: ${e}`));
+			}
+		}
+
+		isWaiting.current = !statusType || statusType?.startsWith("WAITING_");
+	}, [statusType]);
+
+	return isWaiting;
 }

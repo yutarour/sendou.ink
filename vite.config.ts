@@ -1,10 +1,15 @@
 import { vitePlugin as remix } from "@remix-run/dev";
 import { installGlobals } from "@remix-run/node";
 import { defineConfig } from "vite";
+import babel from "vite-plugin-babel";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { configDefaults } from "vitest/config";
 
 installGlobals();
+
+const ReactCompilerConfig = {
+	target: "18",
+};
 
 export default defineConfig(() => {
 	return {
@@ -22,14 +27,17 @@ export default defineConfig(() => {
 					v3_routeConfig: true,
 				},
 			}),
+			babel({
+				filter: /\.[jt]sx?$/,
+				babelConfig: {
+					presets: ["@babel/preset-typescript"],
+					plugins: [["babel-plugin-react-compiler", ReactCompilerConfig]],
+				},
+			}),
 			tsconfigPaths(),
 		],
 		test: {
 			exclude: [...configDefaults.exclude, "e2e/**"],
-			fakeTimers: {
-				// todo: why is the any needed here, can it be removed after Vite 6?
-				toFake: ["Date", "setTimeout", "clearTimeout"] as any,
-			},
 		},
 		build: {
 			// this is mostly done so that i18n jsons as defined in ./app/modules/i18n/loader.ts

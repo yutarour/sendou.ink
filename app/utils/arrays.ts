@@ -1,10 +1,6 @@
 // TODO: when more examples of permissions profile difference between
 // this implementation and one that takes arrays
 
-import clone from "just-clone";
-import shuffle from "just-shuffle";
-import invariant from "~/utils/invariant";
-
 // (not all arrays need to necessarily run but they need to be defined)
 export function allTruthy(arr: unknown[]) {
 	return arr.every(Boolean);
@@ -51,51 +47,8 @@ export function normalizeFormFieldArray(
 	return value == null ? [] : typeof value === "string" ? [value] : value;
 }
 
-/** Can be used as a strongly typed array filter */
-export function isDefined<T>(value: T | undefined | null): value is T {
-	return value !== null && value !== undefined;
-}
-
-export function removeDuplicates<T>(arr: T[]): T[] {
-	const seen = new Set<T>();
-
-	return arr.filter((item) => {
-		if (seen.has(item)) return false;
-		seen.add(item);
-
-		return true;
-	});
-}
-
-export function removeDuplicatesByProperty<T>(
-	arr: T[],
-	getter: (arg0: T) => number | string,
-): T[] {
-	const seen = new Set();
-	return arr.filter((item) => {
-		const id = getter(item);
-
-		if (seen.has(id)) return false;
-		seen.add(id);
-
-		return true;
-	});
-}
-
 export function nullFilledArray(size: number): null[] {
 	return new Array(size).fill(null);
-}
-
-export function pickRandomItem<T>(array: T[]): T {
-	invariant(array.length > 0, "Can't pick from empty array");
-
-	const shuffled = shuffle(clone(array));
-
-	return shuffled[0];
-}
-
-export function filterOutFalsy<T>(arr: (T | null | undefined)[]): T[] {
-	return arr.filter(Boolean) as T[];
 }
 
 /**
@@ -139,4 +92,21 @@ export function diff<T extends string | number>(arr1: T[], arr2: T[]): T[] {
 	}
 
 	return result;
+}
+
+export function mostPopularArrayElement<T>(arr: T[]): T | null {
+	if (arr.length === 0) return null;
+
+	const counts = countElements(arr);
+	let mostPopularElement: T | null = null;
+	let maxCount = 0;
+
+	for (const [element, count] of counts) {
+		if (count > maxCount) {
+			maxCount = count;
+			mostPopularElement = element;
+		}
+	}
+
+	return mostPopularElement;
 }

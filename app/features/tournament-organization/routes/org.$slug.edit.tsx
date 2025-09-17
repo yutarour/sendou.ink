@@ -1,101 +1,30 @@
 import { Link, useLoaderData } from "@remix-run/react";
 import { Controller, useFieldArray, useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { z } from "zod";
+import type { z } from "zod/v4";
 import { FormMessage } from "~/components/FormMessage";
-import { Label } from "~/components/Label";
-import { Main } from "~/components/Main";
 import { AddFieldButton } from "~/components/form/AddFieldButton";
 import { FormFieldset } from "~/components/form/FormFieldset";
-import { MyForm } from "~/components/form/MyForm";
+import { InputFormField } from "~/components/form/InputFormField";
 import { SelectFormField } from "~/components/form/SelectFormField";
+import { SendouForm } from "~/components/form/SendouForm";
 import { TextAreaFormField } from "~/components/form/TextAreaFormField";
 import { TextArrayFormField } from "~/components/form/TextArrayFormField";
-import { TextFormField } from "~/components/form/TextFormField";
 import { ToggleFormField } from "~/components/form/ToggleFormField";
 import { UserSearchFormField } from "~/components/form/UserSearchFormField";
+import { Label } from "~/components/Label";
+import { Main } from "~/components/Main";
 import { TOURNAMENT_ORGANIZATION_ROLES } from "~/db/tables";
-import { BadgeDisplay } from "~/features/badges/components/BadgeDisplay";
+import { BadgesSelector } from "~/features/badges/components/BadgesSelector";
 import { wrapToValueStringArrayWithDefault } from "~/utils/form";
 import type { Unpacked } from "~/utils/types";
-import { mySlugify, uploadImagePage } from "~/utils/urls";
-import { falsyToNull, id } from "~/utils/zod";
-
+import { uploadImagePage } from "~/utils/urls";
 import { action } from "../actions/org.$slug.edit.server";
 import { loader } from "../loaders/org.$slug.edit.server";
 import { handle, meta } from "../routes/org.$slug";
-export { loader, action, handle, meta };
-
-const DESCRIPTION_MAX_LENGTH = 1_000;
-export const organizationEditSchema = z.object({
-	name: z
-		.string()
-		.trim()
-		.min(2)
-		.max(32)
-		.refine((val) => mySlugify(val).length >= 2, {
-			message: "Not enough non-special characters",
-		}),
-	description: z.preprocess(
-		falsyToNull,
-		z.string().trim().max(DESCRIPTION_MAX_LENGTH).nullable(),
-	),
-	members: z
-		.array(
-			z.object({
-				userId: z.number().int().positive(),
-				role: z.enum(TOURNAMENT_ORGANIZATION_ROLES),
-				roleDisplayName: z.preprocess(
-					falsyToNull,
-					z.string().trim().max(32).nullable(),
-				),
-			}),
-		)
-		.max(32)
-		.refine(
-			(arr) =>
-				arr.map((x) => x.userId).length ===
-				new Set(arr.map((x) => x.userId)).size,
-			{
-				message: "Same member listed twice",
-			},
-		),
-	socials: z
-		.array(
-			z.object({
-				value: z.string().trim().url().max(100).optional().or(z.literal("")),
-			}),
-		)
-		.max(10)
-		.refine(
-			(arr) =>
-				arr.map((x) => x.value).length ===
-				new Set(arr.map((x) => x.value)).size,
-			{
-				message: "Duplicate social links",
-			},
-		),
-	series: z
-		.array(
-			z.object({
-				name: z.string().trim().min(1).max(32),
-				description: z.preprocess(
-					falsyToNull,
-					z.string().trim().max(DESCRIPTION_MAX_LENGTH).nullable(),
-				),
-				showLeaderboard: z.boolean(),
-			}),
-		)
-		.max(10)
-		.refine(
-			(arr) =>
-				arr.map((x) => x.name).length === new Set(arr.map((x) => x.name)).size,
-			{
-				message: "Duplicate series",
-			},
-		),
-	badges: z.array(id).max(50),
-});
+import { TOURNAMENT_ORGANIZATION } from "../tournament-organization-constants";
+import { organizationEditSchema } from "../tournament-organization-schemas";
+export { action, handle, loader, meta };
 
 type FormFields = z.infer<typeof organizationEditSchema> & {
 	members: Array<
@@ -114,8 +43,8 @@ export default function TournamentOrganizationEditPage() {
 
 	return (
 		<Main>
-			<MyForm
-				title={t("org:edit.form.title")}
+			<SendouForm
+				heading={t("org:edit.form.title")}
 				schema={organizationEditSchema}
 				defaultValues={{
 					name: data.organization.name,
@@ -144,26 +73,29 @@ export default function TournamentOrganizationEditPage() {
 					{t("org:edit.form.uploadLogo")}
 				</Link>
 
-				<TextFormField<FormFields> label={t("common:forms.name")} name="name" />
+				<InputFormField<FormFields>
+					label={t("common:forms.name")}
+					name="name"
+				/>
 
-				<TextAreaFormField<typeof organizationEditSchema>
+				<TextAreaFormField<FormFields>
 					label={t("common:forms.description")}
 					name="description"
-					maxLength={DESCRIPTION_MAX_LENGTH}
+					maxLength={TOURNAMENT_ORGANIZATION.DESCRIPTION_MAX_LENGTH}
 				/>
 
 				<MembersFormField />
 
-				<TextArrayFormField<typeof organizationEditSchema>
+				<TextArrayFormField<FormFields>
 					label={t("org:edit.form.socialLinks.title")}
 					name="socials"
-					defaultFieldValue=""
+					format="object"
 				/>
 
 				<SeriesFormField />
 
 				<BadgesFormField />
-			</MyForm>
+			</SendouForm>
 		</Main>
 	);
 }
@@ -203,7 +135,10 @@ function MembersFormField() {
 function MemberFieldset({
 	idx,
 	remove,
-}: { idx: number; remove: (idx: number) => void }) {
+}: {
+	idx: number;
+	remove: (idx: number) => void;
+}) {
 	const { t } = useTranslation(["org"]);
 	const { clearErrors } = useFormContext<FormFields>();
 
@@ -229,7 +164,7 @@ function MemberFieldset({
 				}))}
 			/>
 
-			<TextFormField<FormFields>
+			<InputFormField<FormFields>
 				label={t("org:edit.form.members.roleDisplayName.title")}
 				name={`members.${idx}.roleDisplayName` as const}
 			/>
@@ -271,7 +206,10 @@ function SeriesFormField() {
 function SeriesFieldset({
 	idx,
 	remove,
-}: { idx: number; remove: (idx: number) => void }) {
+}: {
+	idx: number;
+	remove: (idx: number) => void;
+}) {
 	const { t } = useTranslation(["org", "common"]);
 	const { clearErrors } = useFormContext<FormFields>();
 
@@ -283,7 +221,7 @@ function SeriesFieldset({
 				clearErrors("series");
 			}}
 		>
-			<TextFormField<FormFields>
+			<InputFormField<FormFields>
 				label={t("org:edit.form.series.seriesName.title")}
 				name={`series.${idx}.name` as const}
 			/>
@@ -291,7 +229,7 @@ function SeriesFieldset({
 			<TextAreaFormField<FormFields>
 				label={t("common:forms.description")}
 				name={`series.${idx}.description` as const}
-				maxLength={DESCRIPTION_MAX_LENGTH}
+				maxLength={TOURNAMENT_ORGANIZATION.DESCRIPTION_MAX_LENGTH}
 			/>
 
 			<ToggleFormField<FormFields>
@@ -305,6 +243,7 @@ function SeriesFieldset({
 function BadgesFormField() {
 	const { t } = useTranslation(["org"]);
 	const methods = useFormContext<FormFields>();
+	const data = useLoaderData<typeof loader>();
 
 	return (
 		<div>
@@ -314,58 +253,13 @@ function BadgesFormField() {
 				name="badges"
 				render={({ field: { onChange, onBlur, value } }) => (
 					<BadgesSelector
+						options={data.badgeOptions}
 						selectedBadges={value}
 						onBlur={onBlur}
 						onChange={onChange}
 					/>
 				)}
 			/>
-		</div>
-	);
-}
-
-function BadgesSelector({
-	selectedBadges,
-	onChange,
-	onBlur,
-}: {
-	selectedBadges: number[];
-	onChange: (newBadges: number[]) => void;
-	onBlur: () => void;
-}) {
-	const { t } = useTranslation(["org"]);
-	const data = useLoaderData<typeof loader>();
-
-	return (
-		<div className="stack md">
-			{selectedBadges.length > 0 ? (
-				<BadgeDisplay
-					badges={data.badgeOptions.filter((badge) =>
-						selectedBadges.includes(badge.id),
-					)}
-					onBadgeRemove={(badgeId) =>
-						onChange(selectedBadges.filter((id) => id !== badgeId))
-					}
-					key={selectedBadges.join(",")}
-				/>
-			) : (
-				<div className="text-lighter text-md font-bold">
-					{t("org:edit.form.badges.none")}
-				</div>
-			)}
-			<select
-				onBlur={onBlur}
-				onChange={(e) => onChange([Number(e.target.value), ...selectedBadges])}
-			>
-				<option>{t("org:edit.form.badges.select")}</option>
-				{data.badgeOptions
-					.filter((badge) => !selectedBadges.includes(badge.id))
-					.map((badge) => (
-						<option key={badge.id} value={badge.id}>
-							{badge.displayName}
-						</option>
-					))}
-			</select>
 		</div>
 	);
 }

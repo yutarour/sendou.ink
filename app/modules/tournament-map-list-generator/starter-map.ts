@@ -2,13 +2,15 @@
 // if a tie breaker -> random tiebreaker
 // seed = always same
 
+import { stageIds } from "~/modules/in-game-lists/stage-ids";
 import { logger } from "~/utils/logger";
+import { modesShort } from "../in-game-lists/modes";
+import type { ModeWithStage } from "../in-game-lists/types";
 import {
+	seededRandom,
 	type TournamentMapListMap,
 	type TournamentMaplistInput,
-	seededRandom,
 } from ".";
-import { type ModeWithStage, modesShort, stageIds } from "../in-game-lists";
 
 type StarterMapArgs = Pick<
 	TournamentMaplistInput,

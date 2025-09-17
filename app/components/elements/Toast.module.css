@@ -3,9 +3,9 @@
 	gap: 8px;
 	display: flex;
 	position: fixed;
-	top: 55px;
-	right: 8px;
-	z-index: 1;
+	top: 10px;
+	right: 10px;
+	z-index: 10;
 }
 
 .toast {
@@ -20,7 +20,6 @@
 	border: 2px solid var(--border);
 	width: 250px;
 	outline: none;
-	/* biome-ignore lint/correctness/noUnknownProperty: it exists */
 	view-transition-class: toast;
 }
 

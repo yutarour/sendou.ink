@@ -1,44 +1,16 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
-import { redirect } from "@remix-run/node";
 import { useFetcher, useLoaderData } from "@remix-run/react";
 import Compressor from "compressorjs";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "~/components/Button";
+import { SendouButton } from "~/components/elements/Button";
 import { Main } from "~/components/Main";
-import { requireUser } from "~/features/auth/core/user.server";
-import * as TeamRepository from "~/features/team/TeamRepository.server";
-import { isTeamManager } from "~/features/team/team-utils";
 import invariant from "~/utils/invariant";
+import { logger } from "~/utils/logger";
 import { action } from "../actions/upload.server";
-import { countUnvalidatedImg } from "../queries/countUnvalidatedImg.server";
+import { loader } from "../loaders/upload.server";
 import { imgTypeToDimensions, imgTypeToStyle } from "../upload-constants";
 import type { ImageUploadType } from "../upload-types";
-import { requestToImgType } from "../upload-utils";
-export { action };
-
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-	const user = await requireUser(request);
-	const validatedType = requestToImgType(request);
-
-	if (!validatedType) {
-		throw redirect("/");
-	}
-
-	if (validatedType === "team-pfp" || validatedType === "team-banner") {
-		const teamCustomUrl = new URL(request.url).searchParams.get("team") ?? "";
-		const team = await TeamRepository.findByCustomUrl(teamCustomUrl);
-
-		if (!team || !isTeamManager({ team, user })) {
-			throw redirect("/");
-		}
-	}
-
-	return {
-		type: validatedType,
-		unvalidatedImages: countUnvalidatedImg(user.id),
-	};
-};
+export { action, loader };
 
 export default function FileUploadPage() {
 	const { t } = useTranslation(["common"]);
@@ -119,20 +91,21 @@ export default function FileUploadPage() {
 								setImg(file);
 							},
 							error(err) {
-								console.error(err.message);
+								logger.error(err.message);
 							},
 						});
 					}}
 				/>
 			</div>
 			{img ? <PreviewImage img={img} type={data.type} /> : null}
-			<Button
+			<SendouButton
 				className="self-start"
-				disabled={!img || fetcher.state !== "idle"}
-				onClick={handleSubmit}
+				isDisabled={!img || fetcher.state !== "idle"}
+				onPress={handleSubmit}
+				data-testid="upload-button"
 			>
 				{t("common:actions.upload")}
-			</Button>
+			</SendouButton>
 		</Main>
 	);
 }

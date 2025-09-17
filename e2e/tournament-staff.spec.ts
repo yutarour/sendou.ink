@@ -1,6 +1,6 @@
 import test, { expect } from "@playwright/test";
-import { ADMIN_ID } from "~/constants";
 import { NZAP_TEST_ID } from "~/db/seed/constants";
+import { ADMIN_ID } from "~/features/admin/admin-constants";
 import {
 	impersonate,
 	isNotVisible,
@@ -8,6 +8,7 @@ import {
 	navigate,
 	seed,
 	selectUser,
+	startBracket,
 	submit,
 } from "~/utils/playwright";
 import {
@@ -15,7 +16,6 @@ import {
 	tournamentBracketsPage,
 	tournamentMatchPage,
 } from "~/utils/urls";
-import { startBracket } from "./shared";
 
 const TOURNAMENT_ID = 2;
 
@@ -135,6 +135,6 @@ test.describe("Tournament staff", () => {
 		});
 
 		await expect(roomPassSelector).toBeVisible();
-		await expect(page.getByTestId("tab-Chat")).toBeVisible();
+		await expect(page.getByTestId("chat-tab")).toBeVisible();
 	});
 });

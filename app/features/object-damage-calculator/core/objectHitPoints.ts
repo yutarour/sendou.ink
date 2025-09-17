@@ -1,8 +1,8 @@
 import {
 	type AbilityPoints,
+	hpDivided,
 	type SpecialWeaponParams,
 	type SubWeaponParams,
-	hpDivided,
 	specialDeviceHp,
 	specialFieldHp,
 	subStats,
@@ -12,11 +12,11 @@ import {
 	BIG_BUBBLER_ID,
 	CRAB_TANK_ID,
 	SPLASH_WALL_ID,
-} from "~/modules/in-game-lists";
+} from "~/modules/in-game-lists/weapon-ids";
 import invariant from "~/utils/invariant";
 import type { HitPoints } from "../calculator-types";
 
-const WAVE_BREAKER_HP = 400;
+const WAVE_BREAKER_HP = 480;
 const SPRINKLER_HP = 120;
 const RAINMAKER_HP = 1000;
 const SPLAT_BRELLA_SHIELD_HP = 500;
@@ -60,6 +60,13 @@ export const objectHitPoints = (abilityPoints: AbilityPoints): HitPoints => {
 		BulletShelterCanopyFocus: hpDivided(
 			weaponParams.mainWeapons[6030].CanopyHP,
 		),
+		BulletUmbrellaCanopyNormal_Launched: SPLAT_BRELLA_SHIELD_HP * 2,
+		BulletUmbrellaCanopyWide_Launched: hpDivided(
+			weaponParams.mainWeapons[6010].CanopyHP * (10 / 6),
+		),
+		BulletShelterCanopyFocus_Launched: hpDivided(
+			weaponParams.mainWeapons[6030].CanopyHP * (10 / 6),
+		),
 		Wsb_Shield,
 		Bomb_TorpedoBullet: TORPEDO_HP,
 		Chariot: hpDivided(weaponParams.specialWeapons[CRAB_TANK_ID].ArmorHP),
@@ -71,7 +78,7 @@ export const objectHitPoints = (abilityPoints: AbilityPoints): HitPoints => {
 		ShockSonar: WAVE_BREAKER_HP,
 		Wsb_Flag: BEAKON_HP,
 		Wsb_Sprinkler: SPRINKLER_HP,
-		Firework: SUPER_CHUMP_HP,
+		Decoy: SUPER_CHUMP_HP,
 		BulletPogo: TRIPLE_SPLASHDOWN_HP,
 	};
 };

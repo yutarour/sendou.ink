@@ -1,9 +1,10 @@
 import type { MetaFunction } from "@remix-run/node";
 import { lazy } from "react";
+import { Placeholder } from "~/components/Placeholder";
 import { useIsMounted } from "~/hooks/useIsMounted";
 import { metaTags } from "~/utils/remix";
 import type { SendouRouteHandle } from "~/utils/remix.server";
-import { PLANNER_URL, navIconUrl } from "~/utils/urls";
+import { navIconUrl, PLANNER_URL } from "~/utils/urls";
 
 import "../plans.css";
 
@@ -31,7 +32,7 @@ const Planner = lazy(() => import("~/features/map-planner/components/Planner"));
 export default function MapPlannerPage() {
 	const isMounted = useIsMounted();
 
-	if (!isMounted) return <div className="plans__placeholder" />;
+	if (!isMounted) return <Placeholder />;
 
 	return <Planner />;
 }

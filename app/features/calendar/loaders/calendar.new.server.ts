@@ -5,23 +5,23 @@ import * as BadgeRepository from "~/features/badges/BadgeRepository.server";
 import * as CalendarRepository from "~/features/calendar/CalendarRepository.server";
 import { tournamentData } from "~/features/tournament-bracket/core/Tournament.server";
 import * as TournamentOrganizationRepository from "~/features/tournament-organization/TournamentOrganizationRepository.server";
-import { canEditCalendarEvent } from "~/permissions";
-import { unauthorizedIfFalsy } from "~/utils/remix.server";
+import { requireRole } from "~/modules/permissions/guards.server";
 import { tournamentBracketsPage } from "~/utils/urls";
-import { canAddNewEvent } from "../calendar-utils";
+import { canEditCalendarEvent } from "../calendar-utils";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
 	const user = await requireUser(request);
-	const url = new URL(request.url);
+	if (!user.roles.includes("SUPPORTER")) {
+		requireRole(user, "CALENDAR_EVENT_ADDER");
+	}
 
-	unauthorizedIfFalsy(canAddNewEvent(user));
+	const url = new URL(request.url);
 
 	const eventWithTournament = async (key: string) => {
 		const eventId = Number(url.searchParams.get(key));
 		const event = Number.isNaN(eventId)
 			? undefined
-			: await CalendarRepository.findById({
-					id: eventId,
+			: await CalendarRepository.findById(eventId, {
 					includeMapPool: true,
 					includeTieBreakerMapPool: true,
 					includeBadgePrizes: true,
@@ -29,14 +29,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 		if (!event) return;
 
-		// special tags that are added automatically
-		const tags = event?.tags?.filter((tag) => tag !== "BADGE");
-
-		if (!event?.tournamentId) return { ...event, tags, tournament: null };
+		if (!event?.tournamentId) return { ...event, tournament: null };
 
 		return {
 			...event,
-			tags,
 			tournament: await tournamentData({
 				tournamentId: event.tournamentId,
 				user,
@@ -70,18 +66,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 	return {
 		isAddingTournament: Boolean(
-			url.searchParams.has("tournament") || url.searchParams.has("copyEventId"),
+			url.searchParams.has("tournament") ||
+				url.searchParams.has("copyEventId") ||
+				eventToEdit?.tournament,
 		),
 		managedBadges: await BadgeRepository.findManagedByUserId(user.id),
-		recentEventsWithMapPools:
-			await CalendarRepository.findRecentMapPoolsByAuthorId(user.id),
 		eventToEdit: canEditEvent ? eventToEdit : undefined,
 		eventToCopy:
-			user.isTournamentOrganizer && !eventToEdit
+			user.roles.includes("TOURNAMENT_ADDER") && !eventToEdit
 				? await eventWithTournament("copyEventId")
 				: undefined,
 		recentTournaments:
-			user.isTournamentOrganizer && !eventToEdit
+			user.roles.includes("TOURNAMENT_ADDER") && !eventToEdit
 				? await CalendarRepository.findRecentTournamentsByAuthorId(user.id)
 				: undefined,
 		organizations: (

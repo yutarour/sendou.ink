@@ -1,5 +1,5 @@
 import { OAuth2Strategy } from "remix-auth-oauth2";
-import { z } from "zod";
+import { z } from "zod/v4";
 import * as UserRepository from "~/features/user-page/UserRepository.server";
 import invariant from "~/utils/invariant";
 import { logger } from "~/utils/logger";
@@ -29,10 +29,6 @@ const discordUserDetailsSchema = z.tuple([
 export const DiscordStrategy = () => {
 	const envVars = authEnvVars();
 
-	const authGatewayEnabled = () => {
-		return Boolean(process.env.AUTH_GATEWAY_TOKEN_URL);
-	};
-
 	const jsonIfOk = (res: Response) => {
 		if (!res.ok) {
 			throw new Error(
@@ -56,30 +52,22 @@ export const DiscordStrategy = () => {
 		]);
 	};
 
-	const fetchProfileViaGateway = (token: string) => {
-		const url = `${process.env.AUTH_GATEWAY_PROFILE_URL}?token=${token}`;
-
-		return fetch(url).then(jsonIfOk);
-	};
-
 	return new OAuth2Strategy(
 		{
 			clientId: envVars.DISCORD_CLIENT_ID,
 			clientSecret: envVars.DISCORD_CLIENT_SECRET,
 
 			authorizationEndpoint: "https://discord.com/api/oauth2/authorize",
-			tokenEndpoint:
-				process.env.AUTH_GATEWAY_TOKEN_URL ||
-				"https://discord.com/api/oauth2/token",
+			tokenEndpoint: "https://discord.com/api/oauth2/token",
 			redirectURI: new URL("/auth/callback", envVars.BASE_URL).toString(),
 
 			scopes: ["identify", "connections", "email"],
 		},
 		async ({ tokens }) => {
 			try {
-				const discordResponses = authGatewayEnabled()
-					? await fetchProfileViaGateway(tokens.accessToken())
-					: await fetchProfileViaDiscordApi(tokens.accessToken());
+				const discordResponses = await fetchProfileViaDiscordApi(
+					tokens.accessToken(),
+				);
 
 				const [user, connections] =
 					discordUserDetailsSchema.parse(discordResponses);
@@ -103,7 +91,7 @@ export const DiscordStrategy = () => {
 
 				return userFromDb.id;
 			} catch (e) {
-				console.error("Failed to finish authentication:\n", e);
+				logger.error("Failed to finish authentication:\n", e);
 				throw new Error("Failed to finish authentication");
 			}
 		},

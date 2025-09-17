@@ -1,3 +1,4 @@
+import * as R from "remeda";
 import type {
 	AbilityPoints,
 	AnalyzedBuild,
@@ -9,8 +10,8 @@ import type {
 	MainWeaponId,
 	SpecialWeaponId,
 	SubWeaponId,
-} from "~/modules/in-game-lists";
-import { removeDuplicates } from "~/utils/arrays";
+} from "~/modules/in-game-lists/types";
+import { weaponIdToBaseWeaponId } from "~/modules/in-game-lists/weapon-ids";
 import invariant from "~/utils/invariant";
 import { roundToNDecimalPlaces } from "~/utils/number";
 import {
@@ -21,10 +22,6 @@ import {
 import type { CombineWith, DamageReceiver } from "../calculator-types";
 import objectDamages from "./object-dmg.json";
 import { objectHitPoints } from "./objectHitPoints";
-
-const getNormalizedMainWeapondId = (id: MainWeaponId) => {
-	return id % 10 !== 0 ? ((id - 1) as MainWeaponId) : id;
-};
 
 export function damageTypeToMultipliers({
 	type,
@@ -39,7 +36,7 @@ export function damageTypeToMultipliers({
 		if (
 			weapon.type === "MAIN" &&
 			(objectDamagesObj.mainWeaponIds as MainWeaponId[]).includes(
-				getNormalizedMainWeapondId(weapon.id),
+				weaponIdToBaseWeaponId(weapon.id),
 			)
 		) {
 			matchingKeys.push(key as keyof typeof objectDamages);
@@ -83,9 +80,7 @@ function resolveRelevantKey({
 		// handle alt kits e.g. Splatteshot might have id 10 but Tentatek Splattershot has id 11
 		// but in the context of this function they are one and the same
 		const normalizedWeaponId =
-			weapon.type === "MAIN"
-				? getNormalizedMainWeapondId(weapon.id)
-				: weapon.id;
+			weapon.type === "MAIN" ? weaponIdToBaseWeaponId(weapon.id) : weapon.id;
 
 		if (weaponType !== weapon.type) continue;
 		if (!weaponIds.includes(normalizedWeaponId)) continue;
@@ -135,9 +130,7 @@ export function resolveAllUniqueDamageTypes({
 				? analyzed.stats.specialWeaponDamages.map((d) => d.type)
 				: analyzed.stats.damages.map((d) => d.type);
 
-	return removeDuplicates(damageTypes).filter(
-		(dmg) => !dmg.includes("SECONDARY"),
-	);
+	return R.unique(damageTypes).filter((dmg) => !dmg.includes("SECONDARY"));
 }
 
 function resolveFilteredDamages({
@@ -213,7 +206,7 @@ export function calculateDamage({
 }) {
 	const toCombine =
 		anyWeapon.type === "MAIN"
-			? (damageTypesToCombine[anyWeapon.id] ?? []).find(
+			? (damageTypesToCombine[weaponIdToBaseWeaponId(anyWeapon.id)] ?? []).find(
 					(c) => c.when === damageType,
 				)
 			: undefined;
@@ -260,7 +253,8 @@ export function calculateDamage({
 					const otherDamage = () => {
 						//[Special Case] Booyah ignores Tri-Stringer's otherDamage at full charge. In-game bug
 						if (
-							[7010, 7011].includes(anyWeapon.id) &&
+							anyWeapon.type === "MAIN" &&
+							weaponIdToBaseWeaponId(anyWeapon.id) === 7010 &&
 							receiver === "NiceBall_Armor"
 						) {
 							return 0;

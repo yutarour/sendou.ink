@@ -1,33 +1,27 @@
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type { MetaFunction } from "@remix-run/node";
 import type { ShouldRevalidateFunction } from "@remix-run/react";
-import { Link, useLoaderData, useSearchParams } from "@remix-run/react";
+import { useSearchParams } from "@remix-run/react";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { useCopyToClipboard } from "react-use";
-import { Button } from "~/components/Button";
+import { SendouButton } from "~/components/elements/Button";
+import { SendouSwitch } from "~/components/elements/Switch";
 import { Label } from "~/components/Label";
 import { Main } from "~/components/Main";
 import { MapPoolSelector, MapPoolStages } from "~/components/MapPoolSelector";
-import { EditIcon } from "~/components/icons/Edit";
-import type { CalendarEvent } from "~/db/types";
-import { getUserId } from "~/features/auth/core/user.server";
-import * as CalendarRepository from "~/features/calendar/CalendarRepository.server";
-import { type ModeWithStage, stageIds } from "~/modules/in-game-lists";
+import type { Tables } from "~/db/tables";
+import { stageIds } from "~/modules/in-game-lists/stage-ids";
+import type { ModeWithStage } from "~/modules/in-game-lists/types";
 import invariant from "~/utils/invariant";
+import { metaTags } from "~/utils/remix";
 import type { SendouRouteHandle } from "~/utils/remix.server";
-import {
-	MAPS_URL,
-	calendarEventPage,
-	ipLabsMaps,
-	navIconUrl,
-} from "~/utils/urls";
+import { ipLabsMaps, MAPS_URL, navIconUrl } from "~/utils/urls";
 import { generateMapList } from "../core/map-list-generator/map-list";
 import { modesOrder } from "../core/map-list-generator/modes";
 import { mapPoolToNonEmptyModes } from "../core/map-list-generator/utils";
 import { MapPool } from "../core/map-pool";
-import "~/styles/maps.css";
-import { SendouSwitch } from "~/components/elements/Switch";
-import { metaTags } from "~/utils/remix";
+
+import styles from "./maps.module.css";
 
 const AMOUNT_OF_MAPS_IN_MAP_LIST = stageIds.length * 2;
 
@@ -57,78 +51,28 @@ export const handle: SendouRouteHandle = {
 	}),
 };
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-	const user = await getUserId(request);
-	const url = new URL(request.url);
-	const calendarEventId = url.searchParams.get("eventId");
-
-	const event = calendarEventId
-		? await CalendarRepository.findById({
-				id: Number(calendarEventId),
-				includeMapPool: true,
-			})
-		: undefined;
-
-	return {
-		calendarEvent: event
-			? {
-					id: event.eventId,
-					name: event.name,
-					mapPool: event.mapPool,
-				}
-			: undefined,
-		recentEventsWithMapPools: user
-			? await CalendarRepository.findRecentMapPoolsByAuthorId(user.id)
-			: undefined,
-	};
-};
-
 export default function MapListPage() {
 	const { t } = useTranslation(["common"]);
-	const data = useLoaderData<typeof loader>();
-	const [searchParams] = useSearchParams();
-	const { mapPool, handleMapPoolChange, readonly, switchToEditMode } =
+	const { mapPool, handleMapPoolChange, readonly } =
 		useSearchParamPersistedMapPool();
 
 	return (
-		<Main className="maps__container stack lg">
-			{searchParams.has("readonly") && data.calendarEvent && (
-				<div className="maps__pool-meta">
-					<div className="maps__pool-info">
-						{t("common:maps.mapPool")}:{" "}
-						{
-							<Link to={calendarEventPage(data.calendarEvent.id)}>
-								{data.calendarEvent.name}
-							</Link>
-						}
-					</div>
-					<Button
-						variant="outlined"
-						onClick={switchToEditMode}
-						size="tiny"
-						icon={<EditIcon />}
-					>
-						{t("common:actions.edit")}
-					</Button>
-				</div>
-			)}
+		<Main className={`${styles.container} stack lg`}>
 			{readonly ? (
 				<MapPoolStages mapPool={mapPool} />
 			) : (
 				<MapPoolSelector
 					mapPool={mapPool}
 					handleMapPoolChange={handleMapPoolChange}
-					recentEvents={data.recentEventsWithMapPools}
-					initialEvent={data.calendarEvent}
 					allowBulkEdit
-					className="maps__pool-selector"
+					className={styles.poolSelector}
 				/>
 			)}
 			<a
 				href={ipLabsMaps(mapPool.serialized)}
 				target="_blank"
 				rel="noreferrer"
-				className="maps__tournament-map-list-link"
+				className={styles.tournamentMapListLink}
 			>
 				{t("common:maps.tournamentMaplist")}
 			</a>
@@ -137,8 +81,7 @@ export default function MapListPage() {
 	);
 }
 
-function useSearchParamPersistedMapPool() {
-	const data = useLoaderData<typeof loader>();
+export function useSearchParamPersistedMapPool() {
 	const [searchParams, setSearchParams] = useSearchParams();
 
 	const [mapPool, setMapPool] = React.useState(() => {
@@ -146,16 +89,12 @@ function useSearchParamPersistedMapPool() {
 			return new MapPool(searchParams.get("pool")!);
 		}
 
-		if (data.calendarEvent?.mapPool) {
-			return new MapPool(data.calendarEvent.mapPool);
-		}
-
 		return MapPool.ANARCHY;
 	});
 
 	const handleMapPoolChange = (
 		newMapPool: MapPool,
-		event?: Pick<CalendarEvent, "id" | "name">,
+		event?: Pick<Tables["CalendarEvent"], "id" | "name">,
 	) => {
 		setMapPool(newMapPool);
 		setSearchParams(
@@ -168,20 +107,10 @@ function useSearchParamPersistedMapPool() {
 		);
 	};
 
-	const switchToEditMode = () => {
-		const newSearchParams = new URLSearchParams(searchParams);
-		newSearchParams.delete("readonly");
-		setSearchParams(newSearchParams, {
-			replace: false,
-			preventScrollReset: true,
-		});
-	};
-
 	return {
 		mapPool,
 		readonly: searchParams.has("readonly"),
 		handleMapPoolChange,
-		switchToEditMode,
 	};
 }
 
@@ -210,8 +139,8 @@ function MapListCreator({ mapPool }: { mapPool: MapPool }) {
 		mapPool.isEmpty() || (szEveryOther && !mapPool.hasMode("SZ"));
 
 	return (
-		<div className="maps__map-list-creator">
-			<div className="maps__toggle-container">
+		<div className={styles.mapListCreator}>
+			<div className={styles.toggleContainer}>
 				<Label>{t("common:maps.halfSz")}</Label>
 				<SendouSwitch
 					isSelected={szEveryOther}
@@ -219,16 +148,16 @@ function MapListCreator({ mapPool }: { mapPool: MapPool }) {
 					size="small"
 				/>
 			</div>
-			<Button onClick={handleCreateMaplist} disabled={disabled}>
+			<SendouButton onPress={handleCreateMaplist} isDisabled={disabled}>
 				{t("common:maps.createMapList")}
-			</Button>
+			</SendouButton>
 			{mapList && (
 				<>
-					<ol className="maps__map-list">
+					<ol className={styles.mapList}>
 						{mapList.map(({ mode, stageId }, i) => (
 							<li key={i}>
 								<abbr
-									className="maps__mode-abbr"
+									className={styles.modeAbbr}
 									title={t(`game-misc:MODE_LONG_${mode}`)}
 								>
 									{t(`game-misc:MODE_SHORT_${mode}`)}
@@ -237,10 +166,10 @@ function MapListCreator({ mapPool }: { mapPool: MapPool }) {
 							</li>
 						))}
 					</ol>
-					<Button
-						size="tiny"
+					<SendouButton
+						size="small"
 						variant="outlined"
-						onClick={() =>
+						onPress={() =>
 							copyToClipboard(
 								mapList
 									.map(
@@ -254,7 +183,7 @@ function MapListCreator({ mapPool }: { mapPool: MapPool }) {
 						}
 					>
 						{t("common:actions.copyToClipboard")}
-					</Button>
+					</SendouButton>
 				</>
 			)}
 		</div>

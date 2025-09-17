@@ -1,11 +1,12 @@
 {
 	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
 	"files": {
-		"ignore": [
-			"./scripts/dicts/**/*",
-			"./scripts/output/**/*",
-			"./app/db/seed/placements.json",
-			"./build/**/*"
+		"includes": [
+			"**",
+			"!scripts/dicts/**/*",
+			"!scripts/output/**/*",
+			"!app/db/seed/placements.json",
+			"!build/**/*"
 		]
 	},
 	"linter": {
@@ -13,7 +14,7 @@
 			"suspicious": {
 				"noExplicitAny": "off",
 				"noArrayIndexKey": "off",
-				"noConsoleLog": "error"
+				"noConsole": { "level": "error" }
 			},
 			"style": {
 				"noNonNullAssertion": "off",
@@ -28,19 +29,35 @@
 				"useTemplate": {
 					"fix": "safe",
 					"level": "error"
-				}
+				},
+				"noParameterAssign": "error",
+				"useAsConstAssertion": "error",
+				"useDefaultParameterLast": "error",
+				"useEnumInitializers": "error",
+				"useSelfClosingElements": "error",
+				"useSingleVarDeclarator": "error",
+				"useNumberNamespace": "error",
+				"noInferrableTypes": "error",
+				"noUselessElse": "error"
 			},
 			"a11y": {
 				"useKeyWithClickEvents": "off",
-				"noLabelWithoutControl": "off"
+				"noLabelWithoutControl": "off",
+				"noSvgWithoutTitle": "off"
 			},
 			"complexity": {
 				"useLiteralKeys": {
 					"fix": "safe",
 					"level": "error"
 				}
+			},
+			"nursery": {
+				"useUniqueElementIds": "off"
 			}
 		}
+	},
+	"formatter": {
+		"useEditorconfig": true
 	},
 	"css": {
 		"formatter": {

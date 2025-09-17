@@ -1,60 +1,56 @@
-import { type Locator, type Page, expect } from "@playwright/test";
-import { ADMIN_ID } from "~/constants";
+import { expect, type Locator, type Page } from "@playwright/test";
+import { ADMIN_ID } from "~/features/admin/admin-constants";
 import type { SeedVariation } from "~/features/api-private/routes/seed";
+import { tournamentBracketsPage } from "./urls";
 
 export async function selectWeapon({
 	page,
 	name,
-	inputName = "weapon",
+	testId = "weapon-select",
 }: {
 	page: Page;
 	name: string;
-	inputName?: string;
+	testId?: string;
 }) {
-	return selectComboboxValue({ page, value: name, inputName });
+	await page.getByTestId(testId).click();
+	await page.getByPlaceholder("Search weapons...").fill(name);
+	await page
+		.getByRole("listbox", { name: "Suggestions" })
+		.getByTestId(`weapon-select-option-${name}`)
+		.click();
 }
 
 export async function selectUser({
 	page,
 	userName,
 	labelName,
+	exact = false,
 }: {
 	page: Page;
 	userName: string;
 	labelName: string;
+	exact?: boolean;
 }) {
-	const combobox = page.getByLabel(labelName);
-	await expect(combobox).not.toBeDisabled();
+	const comboboxButton = page.getByLabel(labelName, { exact });
+	const searchInput = page.getByTestId("user-search-input");
+	const option = page.getByTestId("user-search-item").first();
 
-	await combobox.clear();
-	await combobox.fill(userName);
-	await expect(page.getByTestId("combobox-option-0")).toBeVisible();
+	await expect(comboboxButton).not.toBeDisabled();
+
+	await comboboxButton.click();
+	await searchInput.fill(userName);
+	await expect(option).toBeVisible();
 	await page.keyboard.press("Enter");
-}
-
-export async function selectComboboxValue({
-	page,
-	value,
-	inputName,
-	locator,
-}: {
-	page: Page;
-	value: string;
-	inputName?: string;
-	locator?: Locator;
-}) {
-	if (!locator && !inputName) {
-		throw new Error("Must provide either locator or inputName");
-	}
-	const combobox = locator ?? page.getByTestId(`${inputName!}-combobox-input`);
-	await combobox.clear();
-	await combobox.fill(value);
-	await combobox.press("Enter");
 }
 
 /** page.goto that waits for the page to be hydrated before proceeding */
 export async function navigate({ page, url }: { page: Page; url: string }) {
 	await page.goto(url);
+	await expectIsHydrated(page);
+}
+
+/** Waits and expects the page to be hydrated (click handlers etc. ready for testing) */
+export async function expectIsHydrated(page: Page) {
 	await expect(page.getByTestId("hydrated")).toHaveCount(1);
 }
 
@@ -90,3 +86,16 @@ export async function fetchSendouInk<T>(url: string) {
 
 	return res.json() as T;
 }
+
+export const startBracket = async (page: Page, tournamentId = 2) => {
+	await seed(page);
+	await impersonate(page);
+
+	await navigate({
+		page,
+		url: tournamentBracketsPage({ tournamentId }),
+	});
+
+	await page.getByTestId("finalize-bracket-button").click();
+	await page.getByTestId("confirm-finalize-bracket-button").click();
+};

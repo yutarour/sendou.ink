@@ -1,82 +1,16 @@
-import type { ActionFunction } from "@remix-run/node";
-import { redirect } from "@remix-run/node";
 import { Form, useMatches, useParams } from "@remix-run/react";
-import { z } from "zod";
-import { Button, LinkButton } from "~/components/Button";
-import { Dialog } from "~/components/Dialog";
+import { SendouButton } from "~/components/elements/Button";
+import { SendouDialog } from "~/components/elements/Dialog";
 import { Redirect } from "~/components/Redirect";
-import { PLUS_TIERS, PlUS_SUGGESTION_COMMENT_MAX_LENGTH } from "~/constants";
 import { useUser } from "~/features/auth/core/user";
-import { requireUser } from "~/features/auth/core/user.server";
-import * as PlusSuggestionRepository from "~/features/plus-suggestions/PlusSuggestionRepository.server";
-import {
-	nextNonCompletedVoting,
-	rangeToMonthYear,
-} from "~/features/plus-voting/core";
-import {
-	canAddCommentToSuggestionBE,
-	canAddCommentToSuggestionFE,
-} from "~/permissions";
 import { atOrError } from "~/utils/arrays";
-import {
-	badRequestIfFalsy,
-	errorToastIfFalsy,
-	parseRequestPayload,
-} from "~/utils/remix.server";
 import { plusSuggestionPage } from "~/utils/urls";
-import { actualNumber, trimmedString } from "~/utils/zod";
+import { action } from "../actions/plus.suggestions.comment.$tier.$userId.server";
+import { PLUS_SUGGESTION } from "../plus-suggestions-constants";
+import { canAddCommentToSuggestionFE } from "../plus-suggestions-utils";
 import type { PlusSuggestionsLoaderData } from "./plus.suggestions";
 import { CommentTextarea } from "./plus.suggestions.new";
-
-const commentActionSchema = z.object({
-	comment: z.preprocess(
-		trimmedString,
-		z.string().min(1).max(PlUS_SUGGESTION_COMMENT_MAX_LENGTH),
-	),
-	tier: z.preprocess(
-		actualNumber,
-		z
-			.number()
-			.min(Math.min(...PLUS_TIERS))
-			.max(Math.max(...PLUS_TIERS)),
-	),
-	suggestedId: z.preprocess(actualNumber, z.number()),
-});
-
-export const action: ActionFunction = async ({ request }) => {
-	const data = await parseRequestPayload({
-		request,
-		schema: commentActionSchema,
-	});
-	const user = await requireUser(request);
-
-	const votingMonthYear = rangeToMonthYear(
-		badRequestIfFalsy(nextNonCompletedVoting(new Date())),
-	);
-
-	const suggestions =
-		await PlusSuggestionRepository.findAllByMonth(votingMonthYear);
-
-	errorToastIfFalsy(
-		canAddCommentToSuggestionBE({
-			suggestions,
-			user,
-			suggested: { id: data.suggestedId },
-			targetPlusTier: data.tier,
-		}),
-		"No permissions to add this comment",
-	);
-
-	await PlusSuggestionRepository.create({
-		authorId: user.id,
-		suggestedId: data.suggestedId,
-		text: data.comment,
-		tier: data.tier,
-		...votingMonthYear,
-	});
-
-	throw redirect(plusSuggestionPage({ tier: data.tier }));
-};
+export { action };
 
 export default function PlusCommentModalPage() {
 	const user = useUser();
@@ -107,26 +41,18 @@ export default function PlusCommentModalPage() {
 	}
 
 	return (
-		<Dialog isOpen>
+		<SendouDialog
+			heading={`${userBeingCommented.suggested.username}'s +${tierSuggestedTo} suggestion`}
+			onCloseTo={plusSuggestionPage()}
+		>
 			<Form method="post" className="stack md">
 				<input type="hidden" name="tier" value={tierSuggestedTo} />
 				<input type="hidden" name="suggestedId" value={targetUserId} />
-				<h2 className="plus__modal-title">
-					{userBeingCommented.suggested.username}&apos;s +{tierSuggestedTo}{" "}
-					suggestion
-				</h2>
-				<CommentTextarea maxLength={PlUS_SUGGESTION_COMMENT_MAX_LENGTH} />
-				<div className="plus__modal-buttons">
-					<Button type="submit">Submit</Button>
-					<LinkButton
-						to={plusSuggestionPage()}
-						variant="minimal-destructive"
-						size="tiny"
-					>
-						Cancel
-					</LinkButton>
+				<CommentTextarea maxLength={PLUS_SUGGESTION.COMMENT_MAX_LENGTH} />
+				<div>
+					<SendouButton type="submit">Submit</SendouButton>
 				</div>
 			</Form>
-		</Dialog>
+		</SendouDialog>
 	);
 }

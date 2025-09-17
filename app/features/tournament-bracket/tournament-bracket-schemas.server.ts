@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v4";
 import {
 	_action,
 	checkboxValueToBoolean,
@@ -10,6 +10,7 @@ import {
 	stageId,
 } from "~/utils/zod";
 import { TOURNAMENT } from "../tournament/tournament-constants";
+import * as PickBan from "./core/PickBan";
 import * as PreparedMaps from "./core/PreparedMaps";
 
 const activeRosterPlayerIds = z.preprocess(safeJSONParse, z.array(id));
@@ -111,9 +112,8 @@ const tournamentRoundMaps = z.object({
 		.nullish(),
 	count: numericEnum(TOURNAMENT.AVAILABLE_BEST_OF),
 	type: z.enum(["BEST_OF", "PLAY_ALL"]),
-	pickBan: z.enum(["COUNTERPICK", "BAN_2"]).nullish(),
+	pickBan: z.enum(PickBan.types).nullish(),
 });
-
 export const bracketSchema = z.union([
 	z.object({
 		_action: _action("START_BRACKET"),
@@ -145,9 +145,6 @@ export const bracketSchema = z.union([
 		bracketIdx,
 	}),
 	z.object({
-		_action: _action("FINALIZE_TOURNAMENT"),
-	}),
-	z.object({
 		_action: _action("BRACKET_CHECK_IN"),
 		bracketIdx,
 	}),
@@ -159,8 +156,23 @@ export const bracketSchema = z.union([
 	}),
 ]);
 
-export const matchPageParamsSchema = z.object({ mid: id });
+export const matchPageParamsSchema = z.object({ id, mid: id });
 
 export const tournamentTeamPageParamsSchema = z.object({
+	id,
 	tid: id,
+});
+
+export type TournamentBadgeReceivers = z.infer<typeof badgeReceivers>;
+
+const badgeReceivers = z.array(
+	z.object({
+		badgeId: id,
+		tournamentTeamId: id,
+		userIds: z.array(id).min(1).max(50),
+	}),
+);
+
+export const finalizeTournamentActionSchema = z.object({
+	badgeReceivers: z.preprocess(safeJSONParse, badgeReceivers.nullish()),
 });

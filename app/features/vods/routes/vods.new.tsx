@@ -1,139 +1,49 @@
-import {
-	type ActionFunction,
-	type LoaderFunctionArgs,
-	redirect,
-} from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
-import * as React from "react";
 import {
 	Controller,
 	get,
 	useFieldArray,
 	useFormContext,
+	useWatch,
 } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { z } from "zod";
-import { Button } from "~/components/Button";
-import { WeaponCombobox } from "~/components/Combobox";
+import type { z } from "zod/v4";
+import { SendouButton } from "~/components/elements/Button";
+import { UserSearch } from "~/components/elements/UserSearch";
 import { FormMessage } from "~/components/FormMessage";
-import { Label } from "~/components/Label";
-import { Main } from "~/components/Main";
-import { UserSearch } from "~/components/UserSearch";
 import { AddFieldButton } from "~/components/form/AddFieldButton";
 import { RemoveFieldButton } from "~/components/form/RemoveFieldButton";
-import type { Video } from "~/db/types";
-import { requireUser } from "~/features/auth/core/user.server";
-import {
-	type MainWeaponId,
-	modesShort,
-	stageIds,
-} from "~/modules/in-game-lists";
-import {
-	type SendouRouteHandle,
-	notFoundIfFalsy,
-	parseRequestPayload,
-} from "~/utils/remix.server";
-import { vodVideoPage } from "~/utils/urls";
-import { actualNumber, id } from "~/utils/zod";
+import { Label } from "~/components/Label";
+import { Main } from "~/components/Main";
+import { WeaponSelect } from "~/components/WeaponSelect";
+import type { Tables } from "~/db/tables";
+import { modesShort } from "~/modules/in-game-lists/modes";
+import { stageIds } from "~/modules/in-game-lists/stage-ids";
+import { useHasRole } from "~/modules/permissions/hooks";
+import type { SendouRouteHandle } from "~/utils/remix.server";
 import { Alert } from "../../../components/Alert";
 import { DateFormField } from "../../../components/form/DateFormField";
-import { MyForm } from "../../../components/form/MyForm";
+import { InputFormField } from "../../../components/form/InputFormField";
 import { SelectFormField } from "../../../components/form/SelectFormField";
-import { TextFormField } from "../../../components/form/TextFormField";
-import { useUser } from "../../auth/core/user";
-import { createVod, updateVodByReplacing } from "../queries/createVod.server";
-import { findVodById } from "../queries/findVodById.server";
+import { SendouForm } from "../../../components/form/SendouForm";
+import { action } from "../actions/vods.new.server";
+import { loader } from "../loaders/vods.new.server";
 import { videoMatchTypes } from "../vods-constants";
 import { videoInputSchema } from "../vods-schemas";
-import { canAddVideo, canEditVideo, vodToVideoBeingAdded } from "../vods-utils";
+export { action, loader };
 
 export const handle: SendouRouteHandle = {
 	i18n: ["vods", "calendar"],
 };
 
-export const action: ActionFunction = async ({ request }) => {
-	const user = await requireUser(request);
-	const data = await parseRequestPayload({
-		request,
-		schema: videoInputSchema,
-	});
-
-	if (!canAddVideo(user)) {
-		throw new Response(null, { status: 401 });
-	}
-
-	let video: Video;
-	if (data.vodToEditId) {
-		const vod = notFoundIfFalsy(findVodById(data.vodToEditId));
-
-		if (
-			!canEditVideo({
-				userId: user.id,
-				submitterUserId: vod.submitterUserId,
-				povUserId: typeof vod.pov === "string" ? undefined : vod.pov?.id,
-			})
-		) {
-			throw new Response("no permissions to edit this vod", { status: 401 });
-		}
-
-		video = updateVodByReplacing({
-			...data.video,
-			submitterUserId: user.id,
-			isValidated: true,
-			id: data.vodToEditId,
-		});
-	} else {
-		video = createVod({
-			...data.video,
-			submitterUserId: user.id,
-			isValidated: true,
-		});
-	}
-
-	throw redirect(vodVideoPage(video.id));
-};
-
-const newVodLoaderParamsSchema = z.object({
-	vod: z.preprocess(actualNumber, id),
-});
-
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-	const user = await requireUser(request);
-
-	const url = new URL(request.url);
-	const params = newVodLoaderParamsSchema.safeParse(
-		Object.fromEntries(url.searchParams),
-	);
-
-	if (!params.success) {
-		return { vodToEdit: null };
-	}
-
-	const vod = notFoundIfFalsy(findVodById(params.data.vod));
-	const vodToEdit = vodToVideoBeingAdded(vod);
-
-	if (
-		!canEditVideo({
-			submitterUserId: vod.submitterUserId,
-			userId: user.id,
-			povUserId:
-				vodToEdit.pov?.type === "USER" ? vodToEdit.pov.userId : undefined,
-		})
-	) {
-		return { vodToEdit: null };
-	}
-
-	return { vodToEdit: { ...vodToEdit, id: vod.id } };
-};
-
 export type VodFormFields = z.infer<typeof videoInputSchema>;
 
 export default function NewVodPage() {
-	const user = useUser();
+	const isVideoAdder = useHasRole("VIDEO_ADDER");
 	const data = useLoaderData<typeof loader>();
 	const { t } = useTranslation(["vods"]);
 
-	if (!user || !user.isVideoAdder) {
+	if (!isVideoAdder) {
 		return (
 			<Main className="stack items-center">
 				<Alert variation="WARNING">{t("vods:gainPerms")}</Alert>
@@ -143,8 +53,8 @@ export default function NewVodPage() {
 
 	return (
 		<Main halfWidth>
-			<MyForm
-				title={
+			<SendouForm
+				heading={
 					data.vodToEdit
 						? t("vods:forms.title.edit")
 						: t("vods:forms.title.create")
@@ -168,19 +78,20 @@ export default function NewVodPage() {
 				}
 			>
 				<FormFields />
-			</MyForm>
+			</SendouForm>
 		</Main>
 	);
 }
 
 function FormFields() {
 	const { t } = useTranslation(["vods"]);
-	const { watch } = useFormContext<VodFormFields>();
-	const videoType = watch("video.type");
+	const videoType = useWatch({
+		name: "video.type",
+	}) as VodFormFields["video"]["type"];
 
 	return (
 		<>
-			<TextFormField<VodFormFields>
+			<InputFormField<VodFormFields>
 				label={t("vods:forms.title.youtubeUrl")}
 				name="video.youtubeUrl"
 				placeholder="https://www.youtube.com/watch?v=-dQ6JsVIKdY"
@@ -188,7 +99,7 @@ function FormFields() {
 				size="medium"
 			/>
 
-			<TextFormField<VodFormFields>
+			<InputFormField<VodFormFields>
 				label={t("vods:forms.title.videoTitle")}
 				name="video.title"
 				placeholder="[SCL 47] (Grand Finals) Team Olive vs. Kraken Paradise"
@@ -234,6 +145,7 @@ function PovFormField() {
 				field: { onChange, onBlur, value },
 				fieldState: { error },
 			}) => {
+				// biome-ignore lint/complexity/noUselessFragments: Biome upgrade
 				if (!value) return <></>;
 
 				const asPlainInput = value.type === "NAME";
@@ -248,34 +160,25 @@ function PovFormField() {
 
 				return (
 					<div>
-						<div className="stack horizontal md items-center mb-1">
-							<Label required htmlFor="pov" className="mb-0">
-								{t("vods:forms.title.pov")}
-							</Label>
-							<Button
-								size="tiny"
-								variant="minimal"
-								onClick={toggleInputType}
-								className="outline-theme"
-							>
-								{asPlainInput
-									? t("calendar:forms.team.player.addAsUser")
-									: t("calendar:forms.team.player.addAsText")}
-							</Button>
-						</div>
 						{asPlainInput ? (
-							<input
-								id="pov"
-								value={value.name ?? ""}
-								onChange={(e) => {
-									onChange({ type: "NAME", name: e.target.value });
-								}}
-								onBlur={onBlur}
-							/>
+							<>
+								<Label required htmlFor="pov">
+									{t("vods:forms.title.pov")}
+								</Label>
+								<input
+									id="pov"
+									value={value.name ?? ""}
+									onChange={(e) => {
+										onChange({ type: "NAME", name: e.target.value });
+									}}
+									onBlur={onBlur}
+								/>
+							</>
 						) : (
 							<UserSearch
-								id="pov"
-								inputName="team-player"
+								label={t("vods:forms.title.pov")}
+								isRequired
+								name="team-player"
 								initialUserId={value.userId}
 								onChange={(newUser) =>
 									onChange({
@@ -286,6 +189,16 @@ function PovFormField() {
 								onBlur={onBlur}
 							/>
 						)}
+						<SendouButton
+							size="small"
+							variant="minimal"
+							onPress={toggleInputType}
+							className="outline-theme mt-2"
+						>
+							{asPlainInput
+								? t("calendar:forms.team.player.addAsUser")
+								: t("calendar:forms.team.player.addAsText")}
+						</SendouButton>
 						{error && (
 							<FormMessage type="error">{error.message as string}</FormMessage>
 						)}
@@ -301,7 +214,11 @@ function PovFormField() {
 	);
 }
 
-function MatchesFormfield({ videoType }: { videoType: Video["type"] }) {
+function MatchesFormfield({
+	videoType,
+}: {
+	videoType: Tables["Video"]["type"];
+}) {
 	const {
 		formState: { errors },
 	} = useFormContext<VodFormFields>();
@@ -347,9 +264,8 @@ function MatchesFieldset({
 	idx: number;
 	remove: (idx: number) => void;
 	canRemove: boolean;
-	videoType: Video["type"];
+	videoType: Tables["Video"]["type"];
 }) {
-	const id = React.useId();
 	const { t } = useTranslation(["vods", "game-misc"]);
 
 	return (
@@ -359,7 +275,7 @@ function MatchesFieldset({
 				{canRemove ? <RemoveFieldButton onClick={() => remove(idx)} /> : null}
 			</div>
 
-			<TextFormField<VodFormFields>
+			<InputFormField<VodFormFields>
 				required
 				label={t("vods:forms.title.startTimestamp")}
 				name={`video.matches.${idx}.startsAt`}
@@ -400,16 +316,14 @@ function MatchesFieldset({
 									<div className="stack sm">
 										{new Array(4).fill(null).map((_, i) => {
 											return (
-												<WeaponCombobox
+												<WeaponSelect
 													key={i}
-													required
-													fullWidth
-													inputName={`player-${i}-weapon`}
-													initialWeaponId={value[i]}
-													onChange={(selected) => {
-														if (!selected) return;
+													isRequired
+													testId={`player-${i}-weapon`}
+													value={value[i] ?? null}
+													onChange={(weaponId) => {
 														const weapons = [...value];
-														weapons[i] = Number(selected.value) as MainWeaponId;
+														weapons[i] = weaponId;
 
 														onChange(weapons);
 													}}
@@ -425,18 +339,14 @@ function MatchesFieldset({
 											{new Array(4).fill(null).map((_, i) => {
 												const adjustedI = i + 4;
 												return (
-													<WeaponCombobox
+													<WeaponSelect
 														key={i}
-														required
-														fullWidth
-														inputName={`player-${adjustedI}-weapon`}
-														initialWeaponId={value[adjustedI]}
-														onChange={(selected) => {
-															if (!selected) return;
+														isRequired
+														testId={`player-${adjustedI}-weapon`}
+														value={value[adjustedI] ?? null}
+														onChange={(weaponId) => {
 															const weapons = [...value];
-															weapons[adjustedI] = Number(
-																selected.value,
-															) as MainWeaponId;
+															weapons[adjustedI] = weaponId;
 
 															onChange(weapons);
 														}}
@@ -447,25 +357,13 @@ function MatchesFieldset({
 									</div>
 								</div>
 							) : (
-								<>
-									<Label required htmlFor={id}>
-										{t("vods:forms.title.weapon")}
-									</Label>
-									<WeaponCombobox
-										id={id}
-										required
-										fullWidth
-										inputName={`match-${idx}-weapon`}
-										initialWeaponId={value[0]}
-										onChange={(selected) =>
-											onChange(
-												selected?.value
-													? [Number(selected.value) as MainWeaponId]
-													: [],
-											)
-										}
-									/>
-								</>
+								<WeaponSelect
+									label={t("vods:forms.title.weapon")}
+									isRequired
+									testId={`match-${idx}-weapon`}
+									value={value[0] ?? null}
+									onChange={(weaponId) => onChange([weaponId])}
+								/>
 							)}
 						</div>
 					);

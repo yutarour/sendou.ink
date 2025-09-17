@@ -1,20 +1,20 @@
 import { describe, expect, test } from "vitest";
-import { buildStats } from "~/features/build-analyzer";
 import type {
 	AbilityPoints,
 	AnalyzedBuild,
 	DamageType,
 } from "~/features/build-analyzer";
-import {
-	exampleMainWeaponIdWithSpecialWeaponId,
-	mainWeaponIds,
-	specialWeaponIds,
-} from "~/modules/in-game-lists";
+import { buildStats } from "~/features/build-analyzer";
 import type {
 	MainWeaponId,
 	SpecialWeaponId,
 	SubWeaponId,
-} from "~/modules/in-game-lists";
+} from "~/modules/in-game-lists/types";
+import {
+	exampleMainWeaponIdWithSpecialWeaponId,
+	mainWeaponIds,
+	specialWeaponIds,
+} from "~/modules/in-game-lists/weapon-ids";
 import { calculateDamage } from "./objectDamage";
 
 function calculate({

@@ -6,8 +6,8 @@ import type {
 	ParticipantResult,
 	Result,
 	RoundRobinMode,
-	SeedOrdering,
 	Seeding,
+	SeedOrdering,
 	Stage,
 	StageType,
 } from "~/modules/brackets-model";
@@ -26,30 +26,6 @@ import type {
 	Scores,
 	Side,
 } from "./types";
-
-/**
- * Splits an array of objects based on their values at a given key.
- *
- * @param objects The array to split.
- * @param key The key of T.
- */
-export function splitBy<
-	T extends Record<string, unknown>,
-	K extends keyof T,
-	U extends Record<K, string | number>,
->(objects: U[], key: K): U[][] {
-	const map = {} as Record<string | number, U[]>;
-
-	for (const obj of objects) {
-		const commonValue = obj[key];
-
-		if (!map[commonValue]) map[commonValue] = [];
-
-		map[commonValue].push(obj);
-	}
-
-	return Object.values(map);
-}
 
 /**
  * Splits an array in two parts: one with even indices and the other with odd indices.

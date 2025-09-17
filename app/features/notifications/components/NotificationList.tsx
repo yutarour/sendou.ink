@@ -2,11 +2,12 @@ import { Link } from "@remix-run/react";
 import { formatDistance } from "date-fns";
 import { useTranslation } from "react-i18next";
 import { Image } from "~/components/Image";
+import type { LoaderNotification } from "~/components/layout/NotificationPopover";
 import {
+	mapMetaForTranslation,
 	notificationLink,
 	notificationNavIcon,
 } from "~/features/notifications/notifications-utils";
-import type { LoaderNotification } from "~/features/notifications/routes/notifications.peek";
 import { databaseTimestampToDate } from "~/utils/dates";
 import { navIconUrl } from "~/utils/urls";
 import styles from "./NotificationList.module.css";
@@ -20,15 +21,22 @@ export function NotificationItem({
 }: {
 	notification: LoaderNotification;
 }) {
-	const { t } = useTranslation(["common"]);
+	const { t, i18n } = useTranslation(["common"]);
 
 	return (
-		<Link to={notificationLink(notification)} className={styles.item}>
+		<Link
+			to={notificationLink(notification)}
+			className={styles.item}
+			data-testid="notification-item"
+		>
 			<NotificationImage notification={notification}>
 				{!notification.seen ? <div className={styles.unseenDot} /> : null}
 			</NotificationImage>
 			<div className={styles.itemHeader}>
-				{t(`common:notifications.text.${notification.type}`, notification.meta)}
+				{t(
+					`common:notifications.text.${notification.type}`,
+					mapMetaForTranslation(notification, i18n.language),
+				)}
 			</div>
 			<div className={styles.timestamp}>
 				{formatDistance(
@@ -50,7 +58,10 @@ export function NotificationItemDivider() {
 function NotificationImage({
 	notification,
 	children,
-}: { notification: LoaderNotification; children: React.ReactNode }) {
+}: {
+	notification: LoaderNotification;
+	children: React.ReactNode;
+}) {
 	if (notification.pictureUrl) {
 		return (
 			<div className={styles.imageContainer}>

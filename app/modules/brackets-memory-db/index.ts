@@ -1,4 +1,3 @@
-import clone from "just-clone";
 import type {
 	CrudInterface,
 	Database,
@@ -77,7 +76,7 @@ export class InMemoryDatabase implements CrudInterface {
 					// @ts-expect-error imported
 					this.data[table].push({ id, ...values });
 				}
-			} catch (error) {
+			} catch {
 				return -1;
 			}
 			return id;
@@ -94,7 +93,7 @@ export class InMemoryDatabase implements CrudInterface {
 					this.data[table].push({ id: id++, ...object });
 				}
 			}
-		} catch (error) {
+		} catch {
 			return false;
 		}
 
@@ -130,17 +129,19 @@ export class InMemoryDatabase implements CrudInterface {
 		try {
 			if (arg === undefined) {
 				// @ts-expect-error imported
-				return this.data[table].map(clone);
+				return this.data[table].map((val) => structuredClone(val));
 			}
 
 			if (typeof arg === "number") {
 				// @ts-expect-error imported
-				return clone(this.data[table].find((d) => d?.id === arg));
+				return structuredClone(this.data[table].find((d) => d?.id === arg));
 			}
 
 			// @ts-expect-error imported
-			return this.data[table].filter(this.makeFilter(arg)).map(clone);
-		} catch (error) {
+			return this.data[table]
+				.filter(this.makeFilter(arg))
+				.map((val) => structuredClone(val));
+		} catch {
 			return null;
 		}
 	}
@@ -189,7 +190,7 @@ export class InMemoryDatabase implements CrudInterface {
 				// @ts-expect-error imported
 				this.data[table][arg] = value;
 				return true;
-			} catch (error) {
+			} catch {
 				return false;
 			}
 		}

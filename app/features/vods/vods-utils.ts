@@ -1,12 +1,8 @@
-import type { User } from "~/db/types";
-import { isAdmin } from "~/permissions";
+import type { Tables } from "~/db/tables";
+import { isAdmin } from "~/modules/permissions/utils";
 import { databaseTimestampToDate } from "../../utils/dates";
 import { HOURS_MINUTES_SECONDS_REGEX } from "./vods-schemas";
 import type { VideoBeingAdded, Vod } from "./vods-types";
-
-export function canAddVideo(args: { isVideoAdder: number | null }) {
-	return args.isVideoAdder;
-}
 
 export function vodToVideoBeingAdded(vod: Vod): VideoBeingAdded {
 	const dateObj = databaseTimestampToDate(vod.youtubeDate);
@@ -41,9 +37,9 @@ export function canEditVideo({
 	submitterUserId,
 	povUserId,
 }: {
-	userId?: User["id"];
-	submitterUserId: User["id"];
-	povUserId?: User["id"];
+	userId?: Tables["User"]["id"];
+	submitterUserId: Tables["User"]["id"];
+	povUserId?: Tables["User"]["id"];
 }) {
 	if (!userId) return false;
 
@@ -56,7 +52,7 @@ export function canEditVideo({
 
 export function extractYoutubeIdFromVideoUrl(url: string): string | null {
 	const match = url.match(
-		/^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|live\/)|youtu\.be\/)([^&\/\?]+)/,
+		/^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|live\/)|youtu\.be\/)([^&/?]+)/,
 	);
 	return match ? match[1] : null;
 }

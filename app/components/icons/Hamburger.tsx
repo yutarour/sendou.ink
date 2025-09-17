@@ -1,8 +1,4 @@
-export function HamburgerIcon({
-	className,
-}: {
-	className?: string;
-}) {
+export function HamburgerIcon({ className }: { className?: string }) {
 	return (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
@@ -12,7 +8,6 @@ export function HamburgerIcon({
 			stroke="currentColor"
 			className={className}
 		>
-			<title>Hamburger icon</title>
 			<path
 				strokeLinecap="round"
 				strokeLinejoin="round"

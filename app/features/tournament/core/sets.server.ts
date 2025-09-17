@@ -1,6 +1,5 @@
 import type { Tables } from "~/db/tables";
-import type { User } from "~/db/types";
-import type { ModeShort, StageId } from "~/modules/in-game-lists";
+import type { ModeShort, StageId } from "~/modules/in-game-lists/types";
 import type { TournamentMaplistSource } from "~/modules/tournament-map-list-generator";
 import { sourceTypes } from "~/modules/tournament-map-list-generator";
 import invariant from "~/utils/invariant";
@@ -31,7 +30,7 @@ export interface PlayedSet {
 		/** Team's roster that played in this set */
 		roster: Array<
 			Pick<
-				User,
+				Tables["User"],
 				"id" | "username" | "discordAvatar" | "discordId" | "customUrl"
 			>
 		>;

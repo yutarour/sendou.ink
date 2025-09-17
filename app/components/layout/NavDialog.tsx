@@ -1,11 +1,11 @@
 import { Link } from "@remix-run/react";
 import { useTranslation } from "react-i18next";
+import { SendouDialog } from "~/components/elements/Dialog";
 import { navItems } from "~/components/layout/nav-items";
 import { useUser } from "~/features/auth/core/user";
 import { LOG_OUT_URL, navIconUrl, userPage } from "~/utils/urls";
 import { Avatar } from "../Avatar";
-import { Button } from "../Button";
-import { Dialog } from "../Dialog";
+import { SendouButton } from "../elements/Button";
 import { Image } from "../Image";
 import { CrossIcon } from "../icons/Cross";
 import { LogOutIcon } from "../icons/LogOut";
@@ -14,7 +14,10 @@ import { LogInButtonContainer } from "./LogInButtonContainer";
 export function NavDialog({
 	isOpen,
 	close,
-}: { isOpen: boolean; close: () => void }) {
+}: {
+	isOpen: boolean;
+	close: () => void;
+}) {
 	const user = useUser();
 	const { t } = useTranslation(["common"]);
 
@@ -23,12 +26,17 @@ export function NavDialog({
 	}
 
 	return (
-		<Dialog isOpen className="layout__overlay-nav__dialog">
-			<Button
+		<SendouDialog
+			className="layout__overlay-nav__dialog"
+			showHeading={false}
+			aria-label="Site navigation"
+			isFullScreen
+		>
+			<SendouButton
 				icon={<CrossIcon />}
 				variant="minimal-destructive"
 				className="layout__overlay-nav__close-button"
-				onClick={close}
+				onPress={close}
 				aria-label="Close navigation dialog"
 			/>
 			<div className="layout__overlay-nav__nav-items-container">
@@ -54,20 +62,20 @@ export function NavDialog({
 				))}
 			</div>
 			{user ? (
-				<div className="mt-6 w-max mx-auto">
+				<div className="mt-6 stack items-center">
 					<form method="post" action={LOG_OUT_URL}>
-						<Button
-							size="tiny"
+						<SendouButton
+							size="small"
 							variant="outlined"
 							icon={<LogOutIcon />}
 							type="submit"
 						>
 							{t("common:header.logout")}
-						</Button>
+						</SendouButton>
 					</form>
 				</div>
 			) : null}
-		</Dialog>
+		</SendouDialog>
 	);
 }
 

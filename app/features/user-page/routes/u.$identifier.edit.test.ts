@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { MainWeaponId } from "~/modules/in-game-lists";
+import type { MainWeaponId } from "~/modules/in-game-lists/types";
 import { dbInsertUsers, dbReset, wrappedAction } from "~/utils/Test";
-import {
-	action as editUserProfileAction,
-	type userEditActionSchema,
-} from "./u.$identifier.edit";
+import type { userEditActionSchema } from "../user-page-schemas";
+import { action as editUserProfileAction } from "./u.$identifier.edit";
 
 const action = wrappedAction<typeof userEditActionSchema>({
 	action: editUserProfileAction,
@@ -18,7 +16,7 @@ const DEFAULT_FIELDS = {
 	country: "FI",
 	customName: null,
 	customUrl: null,
-	favoriteBadgeId: null,
+	favoriteBadgeIds: null,
 	inGameNameDiscriminator: null,
 	inGameNameText: null,
 	motionSens: null,

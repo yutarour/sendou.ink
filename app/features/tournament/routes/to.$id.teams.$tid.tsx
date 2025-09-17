@@ -1,36 +1,31 @@
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type { MetaFunction } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "~/components/Avatar";
-import { ModeImage, StageImage } from "~/components/Image";
-import { Placement } from "~/components/Placement";
 import { SendouButton } from "~/components/elements/Button";
 import { SendouPopover } from "~/components/elements/Popover";
-import {
-	type TournamentData,
-	type TournamentDataTeam,
-	tournamentDataCached,
+import { ModeImage, StageImage } from "~/components/Image";
+import { Placement } from "~/components/Placement";
+import type {
+	TournamentData,
+	TournamentDataTeam,
 } from "~/features/tournament-bracket/core/Tournament.server";
-import { tournamentTeamPageParamsSchema } from "~/features/tournament-bracket/tournament-bracket-schemas.server";
 import type { TournamentMaplistSource } from "~/modules/tournament-map-list-generator";
 import { metaTags } from "~/utils/remix";
-import { parseParams } from "~/utils/remix.server";
 import {
 	teamPage,
 	tournamentMatchPage,
 	tournamentTeamPage,
 	userPage,
-	userSubmittedImage,
 } from "~/utils/urls";
+import { userSubmittedImage } from "~/utils/urls-img";
 import { TeamWithRoster } from "../components/TeamWithRoster";
-import {
-	type PlayedSet,
-	tournamentTeamSets,
-	winCounts,
-} from "../core/sets.server";
-import { tournamentIdFromParams } from "../tournament-utils";
+import * as Standings from "../core/Standings";
+import type { PlayedSet } from "../core/sets.server";
+import { loader } from "../loaders/to.$id.teams.$tid.server";
 import { useTournament } from "./to.$id";
+export { loader };
 
 export const meta: MetaFunction<typeof loader> = (args) => {
 	const tournamentData = (args.matches[1].data as any)
@@ -53,31 +48,6 @@ export const meta: MetaFunction<typeof loader> = (args) => {
 			: undefined,
 		location: args.location,
 	});
-};
-
-export const loader = async ({ params }: LoaderFunctionArgs) => {
-	const tournamentId = tournamentIdFromParams(params);
-	const tournamentTeamId = parseParams({
-		params,
-		schema: tournamentTeamPageParamsSchema,
-	}).tid;
-
-	const tournament = await tournamentDataCached({ tournamentId });
-	if (
-		!tournament ||
-		!tournament.ctx.teams.some((t) => t.id === tournamentTeamId)
-	) {
-		throw new Response(null, { status: 404 });
-	}
-
-	// TODO: could be inferred from tournament data (winCounts too)
-	const sets = tournamentTeamSets({ tournamentTeamId, tournamentId });
-
-	return {
-		tournamentTeamId,
-		sets,
-		winCounts: winCounts(sets),
-	};
 };
 
 export default function TournamentTeamPage() {
@@ -137,7 +107,7 @@ function StatSquares({
 	const data = useLoaderData<typeof loader>();
 	const tournament = useTournament();
 
-	const placement = tournament.standings.find(
+	const placement = Standings.tournamentStandings(tournament).find(
 		(s) => s.team.id === data.tournamentTeamId,
 	)?.placement;
 
@@ -227,7 +197,7 @@ function SetInfo({ set, team }: { set: PlayedSet; team: TournamentDataTeam }) {
 	};
 
 	const { bracketName, roundNameWithoutMatchIdentifier } =
-		tournament.matchNameById(set.tournamentMatchId);
+		tournament.matchContextNamesById(set.tournamentMatchId);
 
 	return (
 		<div className="tournament__team__set">

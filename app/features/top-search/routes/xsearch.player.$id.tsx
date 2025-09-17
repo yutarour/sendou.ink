@@ -1,22 +1,23 @@
-import type {
-	LoaderFunctionArgs,
-	MetaFunction,
-	SerializeFrom,
-} from "@remix-run/node";
+import type { MetaFunction, SerializeFrom } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { useTranslation } from "react-i18next";
+import { SendouButton } from "~/components/elements/Button";
+import { FormWithConfirm } from "~/components/FormWithConfirm";
+import { UnlinkIcon } from "~/components/icons/Unlink";
 import { Main } from "~/components/Main";
-import { removeDuplicates } from "~/utils/arrays";
+import { useUser } from "~/features/auth/core/user";
 import { metaTags } from "~/utils/remix";
-import { type SendouRouteHandle, notFoundIfFalsy } from "~/utils/remix.server";
+import type { SendouRouteHandle } from "~/utils/remix.server";
 import {
 	navIconUrl,
 	topSearchPage,
 	topSearchPlayerPage,
 	userPage,
 } from "~/utils/urls";
+import { action } from "../actions/xsearch.player.$id.server";
 import { PlacementsTable } from "../components/Placements";
-import { findPlacementsByPlayerId } from "../queries/findPlacements.server";
+import { loader } from "../loaders/xsearch.player.$id.server";
+export { loader, action };
 
 import "../top-search.css";
 
@@ -58,32 +59,15 @@ export const meta: MetaFunction<typeof loader> = (args) => {
 	});
 };
 
-export const loader = async ({ params }: LoaderFunctionArgs) => {
-	const placements = notFoundIfFalsy(
-		findPlacementsByPlayerId(Number(params.id)),
-	);
-
-	const primaryName = placements[0].name;
-	const aliases = removeDuplicates(
-		placements
-			.map((placement) => placement.name)
-			.filter((name) => name !== primaryName),
-	);
-
-	return {
-		placements,
-		names: {
-			primary: primaryName,
-			aliases,
-		},
-	};
-};
-
 export default function XSearchPlayerPage() {
 	const { t } = useTranslation(["common"]);
 	const data = useLoaderData<typeof loader>();
+	const user = useUser();
 
 	const hasUserLinked = Boolean(data.placements[0].discordId);
+
+	const isLinkedToCurrentUser =
+		user && user?.discordId === data.placements[0].discordId;
 
 	return (
 		<Main halfWidth className="stack lg">
@@ -92,7 +76,7 @@ export default function XSearchPlayerPage() {
 					{hasUserLinked ? (
 						<Link to={userPage(data.placements[0])}>{data.names.primary}</Link>
 					) : (
-						<>{data.names.primary}</>
+						data.names.primary
 					)}{" "}
 					{t("common:xsearch.placements")}
 				</h2>
@@ -103,6 +87,27 @@ export default function XSearchPlayerPage() {
 				) : null}
 			</div>
 			<PlacementsTable placements={data.placements} type="MODE_INFO" />
+			{isLinkedToCurrentUser ? <UnlinkFormWithButton /> : null}
 		</Main>
+	);
+}
+
+function UnlinkFormWithButton() {
+	const { t } = useTranslation(["common"]);
+
+	return (
+		<FormWithConfirm
+			dialogHeading={t("common:xsearch.unlink.title")}
+			submitButtonText={t("common:xsearch.unlink.action.short")}
+		>
+			<SendouButton
+				icon={<UnlinkIcon />}
+				variant="destructive"
+				size="miniscule"
+				className="mt-2 self-start"
+			>
+				{t("common:xsearch.unlink.action.long")}
+			</SendouButton>
+		</FormWithConfirm>
 	);
 }

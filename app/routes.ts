@@ -1,19 +1,25 @@
 import {
-	type RouteConfig,
 	index,
 	prefix,
+	type RouteConfig,
 	route,
 } from "@remix-run/route-config";
+
+const devOnlyRoutes =
+	process.env.NODE_ENV === "development"
+		? ([
+				route(
+					"/admin/generate-images",
+					"features/admin/routes/generate-images.tsx",
+				),
+			] satisfies RouteConfig)
+		: [];
 
 export default [
 	index("features/front-page/routes/index.tsx"),
 	route("/patrons-list", "features/front-page/routes/patrons-list.ts"),
 
 	route("/notifications", "features/notifications/routes/notifications.tsx"),
-	route(
-		"/notifications/peek",
-		"features/notifications/routes/notifications.peek.ts",
-	),
 	route(
 		"/notifications/seen",
 		"features/notifications/routes/notifications.seen.ts",
@@ -45,6 +51,7 @@ export default [
 			"results/highlights",
 			"features/user-page/routes/u.$identifier.results.highlights.tsx",
 		),
+		route("admin", "features/user-page/routes/u.$identifier.admin.tsx"),
 	]),
 
 	route("/badges", "features/badges/routes/badges.tsx", [
@@ -61,8 +68,8 @@ export default [
 			":id/report-winners",
 			"features/calendar/routes/calendar.$id.report-winners.tsx",
 		),
-		route("map-pool-events", "features/calendar/routes/map-pool-events.ts"),
 	]),
+	route("/calendar.ics", "features/calendar/routes/calendar.ics.tsx"),
 
 	route("/maps", "features/map-list-generator/routes/maps.tsx"),
 
@@ -79,7 +86,7 @@ export default [
 	),
 
 	route("/to/:id", "features/tournament/routes/to.$id.tsx", [
-		index("features/tournament/routes/to.$id.index.tsx"),
+		index("features/tournament/routes/to.$id.index.ts"),
 		route("register", "features/tournament/routes/to.$id.register.tsx"),
 		route("teams", "features/tournament/routes/to.$id.teams.tsx"),
 		route("teams/:tid", "features/tournament/routes/to.$id.teams.$tid.tsx"),
@@ -92,25 +99,26 @@ export default [
 		route("subs", "features/tournament-subs/routes/to.$id.subs.tsx"),
 		route("subs/new", "features/tournament-subs/routes/to.$id.subs.new.tsx"),
 
-		route("brackets", "features/tournament-bracket/routes/to.$id.brackets.tsx"),
 		route(
 			"divisions",
 			"features/tournament-bracket/routes/to.$id.divisions.tsx",
 		),
 		route(
-			"brackets/subscribe",
-			"features/tournament-bracket/routes/to.$id.brackets.subscribe.tsx",
+			"brackets",
+			"features/tournament-bracket/routes/to.$id.brackets.tsx",
+			[
+				route(
+					"finalize",
+					"features/tournament-bracket/routes/to.$id.brackets.finalize.tsx",
+				),
+			],
 		),
 		route(
 			"matches/:mid",
 			"features/tournament-bracket/routes/to.$id.matches.$mid.tsx",
 		),
-		route(
-			"matches/:mid/subscribe",
-			"features/tournament-bracket/routes/to.$id.matches.$mid.subscribe.tsx",
-		),
 	]),
-	route("luti", "features/tournament/routes/luti.tsx"),
+	route("luti", "features/tournament/routes/luti.ts"),
 
 	...prefix("/org/:slug", [
 		index("features/tournament-organization/routes/org.$slug.tsx"),
@@ -123,11 +131,12 @@ export default [
 	route("/support", "features/info/routes/support.tsx"),
 
 	route("/t", "features/team/routes/t.tsx"),
-	...prefix("/t/:customUrl", [
-		index("features/team/routes/t.$customUrl.tsx"),
+	route("/t/:customUrl", "features/team/routes/t.$customUrl.tsx", [
+		index("features/team/routes/t.$customUrl.index.tsx"),
 		route("edit", "features/team/routes/t.$customUrl.edit.tsx"),
 		route("roster", "features/team/routes/t.$customUrl.roster.tsx"),
 		route("join", "features/team/routes/t.$customUrl.join.tsx"),
+		route("results", "features/team/routes/t.$customUrl.results.tsx"),
 	]),
 
 	...prefix("/vods", [
@@ -165,21 +174,34 @@ export default [
 		route("info", "features/sendouq/routes/q.info.tsx"),
 		route("looking", "features/sendouq/routes/q.looking.tsx"),
 		route("preparing", "features/sendouq/routes/q.preparing.tsx"),
-		route("match/:id", "features/sendouq/routes/q.match.$id.tsx"),
+		route("match/:id", "features/sendouq-match/routes/q.match.$id.tsx"),
 		route("settings", "features/sendouq-settings/routes/q.settings.tsx"),
 		route("streams", "features/sendouq-streams/routes/q.streams.tsx"),
 	]),
-	route("/play", "features/sendouq/routes/play.tsx"),
+	route("/play", "features/sendouq/routes/play.ts"),
 
 	route("/trusters", "features/sendouq/routes/trusters.ts"),
 
-	route("/weapon-usage", "features/sendouq/routes/weapon-usage.tsx"),
+	route("/weapon-usage", "features/sendouq/routes/weapon-usage.ts"),
 
 	route("/tiers", "features/sendouq/routes/tiers.tsx"),
 
 	...prefix("/lfg", [
 		index("features/lfg/routes/lfg.tsx"),
 		route("new", "features/lfg/routes/lfg.new.tsx"),
+	]),
+
+	...prefix("/scrims", [
+		index("features/scrims/routes/scrims.tsx"),
+		route("new", "features/scrims/routes/scrims.new.tsx"),
+		route(":id", "features/scrims/routes/scrims.$id.tsx"),
+	]),
+
+	route("/associations", "features/associations/routes/associations.tsx", [
+		route(
+			"/associations/new",
+			"features/associations/routes/associations.new.tsx",
+		),
 	]),
 
 	route("/admin", "features/admin/routes/admin.tsx"),
@@ -190,7 +212,7 @@ export default [
 	]),
 
 	route("/plus", "features/plus-suggestions/routes/plus.tsx", [
-		index("features/plus-suggestions/routes/plus.index.tsx"),
+		index("features/plus-suggestions/routes/plus.index.ts"),
 		route(
 			"suggestions",
 			"features/plus-suggestions/routes/plus.suggestions.tsx",
@@ -213,9 +235,9 @@ export default [
 		),
 	]),
 
-	route("/patrons", "features/api-private/routes/patrons.tsx"),
-	route("/seed", "features/api-private/routes/seed.tsx"),
-	route("/users", "features/api-private/routes/users.tsx"),
+	route("/patrons", "features/api-private/routes/patrons.ts"),
+	route("/seed", "features/api-private/routes/seed.ts"),
+	route("/users", "features/api-private/routes/users.ts"),
 
 	...prefix("/api", [
 		route(
@@ -226,10 +248,22 @@ export default [
 			"/calendar/:year/:week",
 			"features/api-public/routes/calendar.$year.$week.ts",
 		),
+		route(
+			"/sendouq/active-match/:userId",
+			"features/api-public/routes/sendouq.active-match.$userId.ts",
+		),
+		route(
+			"/sendouq/match/:matchId",
+			"features/api-public/routes/sendouq.match.$matchId.ts",
+		),
 		route("/tournament/:id", "features/api-public/routes/tournament.$id.ts"),
 		route(
 			"/tournament/:id/teams",
 			"features/api-public/routes/tournament.$id.teams.ts",
+		),
+		route(
+			"/tournament/:id/players",
+			"features/api-public/routes/tournament.$id.players.ts",
 		),
 		route(
 			"/tournament/:id/casted",
@@ -248,19 +282,21 @@ export default [
 			"features/api-public/routes/tournament-match.$id.ts",
 		),
 		route("/org/:id", "features/api-public/routes/org.$id.ts"),
+		route("/team/:id", "features/api-public/routes/team.$id.ts"),
 	]),
 
-	route("/short/:customUrl", "features/user-page/routes/short.$customUrl.tsx"),
+	route("/short/:customUrl", "features/user-page/routes/short.$customUrl.ts"),
 
 	route("/theme", "features/theme/routes/theme.ts"),
 
 	...prefix("/auth", [
-		index("features/auth/routes/auth.tsx"),
-		route("callback", "features/auth/routes/auth.callback.tsx"),
-		route("create-link", "features/auth/routes/auth.create-link.tsx"),
-		route("login", "features/auth/routes/auth.login.tsx"),
-		route("logout", "features/auth/routes/auth.logout.tsx"),
-		route("impersonate", "features/auth/routes/auth.impersonate.tsx"),
-		route("impersonate/stop", "features/auth/routes/auth.impersonate.stop.tsx"),
+		index("features/auth/routes/auth.ts"),
+		route("callback", "features/auth/routes/auth.callback.ts"),
+		route("create-link", "features/auth/routes/auth.create-link.ts"),
+		route("login", "features/auth/routes/auth.login.ts"),
+		route("logout", "features/auth/routes/auth.logout.ts"),
+		route("impersonate", "features/auth/routes/auth.impersonate.ts"),
+		route("impersonate/stop", "features/auth/routes/auth.impersonate.stop.ts"),
 	]),
+	...devOnlyRoutes,
 ] satisfies RouteConfig;

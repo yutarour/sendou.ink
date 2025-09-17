@@ -1,34 +1,34 @@
 import type { ActionFunction } from "@remix-run/node";
-import { z } from "zod";
+import { z } from "zod/v4";
 import { requireUser } from "~/features/auth/core/user.server";
 import { userIsBanned } from "~/features/ban/core/banned.server";
+import { bracketProgressionSchema } from "~/features/calendar/calendar-schemas";
 import * as ShowcaseTournaments from "~/features/front-page/core/ShowcaseTournaments.server";
 import { notify } from "~/features/notifications/core/notify.server";
+import * as TournamentTeamRepository from "~/features/tournament/TournamentTeamRepository.server";
 import * as Progression from "~/features/tournament-bracket/core/Progression";
 import {
 	clearTournamentDataCache,
 	tournamentFromDB,
 } from "~/features/tournament-bracket/core/Tournament.server";
-import * as TournamentTeamRepository from "~/features/tournament/TournamentTeamRepository.server";
+import { USER } from "~/features/user-page/user-page-constants";
 import invariant from "~/utils/invariant";
 import { logger } from "~/utils/logger";
 import {
 	badRequestIfFalsy,
 	errorToastIfFalsy,
+	parseParams,
 	parseRequestPayload,
 	successToast,
 } from "~/utils/remix.server";
 import { assertUnreachable } from "~/utils/types";
-import { USER } from "../../../constants";
-import { _action, id } from "../../../utils/zod";
-import { bracketProgressionSchema } from "../../calendar/actions/calendar.new.server";
+import { _action, id, idObject } from "../../../utils/zod";
 import { bracketIdx } from "../../tournament-bracket/tournament-bracket-schemas.server";
-import * as TournamentRepository from "../TournamentRepository.server";
 import { changeTeamOwner } from "../queries/changeTeamOwner.server";
 import { deleteTeam } from "../queries/deleteTeam.server";
 import { joinTeam, leaveTeam } from "../queries/joinLeaveTeam.server";
+import * as TournamentRepository from "../TournamentRepository.server";
 import { teamName } from "../tournament-schemas.server";
-import { tournamentIdFromParams } from "../tournament-utils";
 import { inGameNameIfNeeded } from "../tournament-utils.server";
 
 export const action: ActionFunction = async ({ request, params }) => {
@@ -38,7 +38,10 @@ export const action: ActionFunction = async ({ request, params }) => {
 		schema: adminActionSchema,
 	});
 
-	const tournamentId = tournamentIdFromParams(params);
+	const { id: tournamentId } = parseParams({
+		params,
+		schema: idObject,
+	});
 	const tournament = await tournamentFromDB({ tournamentId, user });
 
 	const validateIsTournamentAdmin = () =>
@@ -74,10 +77,11 @@ export const action: ActionFunction = async ({ request, params }) => {
 				tournamentId,
 			});
 
-			ShowcaseTournaments.addToParticipationInfoMap({
+			ShowcaseTournaments.addToCached({
 				tournamentId,
 				type: "participant",
 				userId: data.userId,
+				newTeamCount: tournament.ctx.teams.length + 1,
 			});
 
 			message = "Team added";
@@ -187,12 +191,19 @@ export const action: ActionFunction = async ({ request, params }) => {
 				"Cannot remove player that has participated in the tournament",
 			);
 
+			if (team.activeRosterUserIds?.includes(data.memberId)) {
+				await TournamentTeamRepository.setActiveRoster({
+					teamId: team.id,
+					activeRosterUserIds: null,
+				});
+			}
+
 			leaveTeam({
 				userId: data.memberId,
 				teamId: team.id,
 			});
 
-			ShowcaseTournaments.removeFromParticipationInfoMap({
+			ShowcaseTournaments.removeFromCached({
 				tournamentId,
 				type: "participant",
 				userId: data.memberId,
@@ -207,6 +218,11 @@ export const action: ActionFunction = async ({ request, params }) => {
 			errorToastIfFalsy(team, "Invalid team id");
 
 			const previousTeam = tournament.teamMemberOfByUser({ id: data.userId });
+
+			errorToastIfFalsy(
+				!previousTeam?.id || previousTeam.id !== team.id,
+				"User is already in this team",
+			);
 
 			errorToastIfFalsy(
 				tournament.hasStarted || !previousTeam,
@@ -236,27 +252,29 @@ export const action: ActionFunction = async ({ request, params }) => {
 				}),
 			});
 
-			ShowcaseTournaments.addToParticipationInfoMap({
+			ShowcaseTournaments.addToCached({
 				tournamentId,
 				type: "participant",
 				userId: data.userId,
 			});
 
-			notify({
-				userIds: [data.userId],
-				notification: {
-					type: "TO_ADDED_TO_TEAM",
-					pictureUrl:
-						tournament.tournamentTeamLogoSrc(team) ?? tournament.ctx.logoSrc,
-					meta: {
-						adderUsername: user.username,
-						teamName: team.name,
-						tournamentId,
-						tournamentName: tournament.ctx.name,
-						tournamentTeamId: team.id,
+			if (!tournament.isTest) {
+				notify({
+					userIds: [data.userId],
+					notification: {
+						type: "TO_ADDED_TO_TEAM",
+						pictureUrl:
+							tournament.tournamentTeamLogoSrc(team) ?? tournament.ctx.logoSrc,
+						meta: {
+							adderUsername: user.username,
+							teamName: team.name,
+							tournamentId,
+							tournamentName: tournament.ctx.name,
+							tournamentTeamId: team.id,
+						},
 					},
-				},
-			});
+				});
+			}
 
 			message = "Member added";
 			break;
@@ -269,13 +287,30 @@ export const action: ActionFunction = async ({ request, params }) => {
 
 			deleteTeam(team.id);
 
-			ShowcaseTournaments.clearParticipationInfoMap();
+			for (const member of team.members) {
+				ShowcaseTournaments.removeFromCached({
+					tournamentId,
+					type: "participant",
+					userId: member.userId,
+				});
+
+				ShowcaseTournaments.updateCachedTournamentTeamCount({
+					tournamentId,
+					newTeamCount: tournament.ctx.teams.length - 1,
+				});
+			}
 
 			message = "Team deleted from tournament";
+
 			break;
 		}
 		case "ADD_STAFF": {
 			validateIsTournamentAdmin();
+
+			errorToastIfFalsy(
+				tournament.ctx.staff.every((staff) => staff.id !== data.userId),
+				"User is already a staff member",
+			);
 
 			await TournamentRepository.addStaff({
 				role: data.role,
@@ -284,7 +319,7 @@ export const action: ActionFunction = async ({ request, params }) => {
 			});
 
 			if (data.role === "ORGANIZER") {
-				ShowcaseTournaments.addToParticipationInfoMap({
+				ShowcaseTournaments.addToCached({
 					tournamentId,
 					type: "organizer",
 					userId: data.userId,
@@ -302,7 +337,7 @@ export const action: ActionFunction = async ({ request, params }) => {
 				userId: data.userId,
 			});
 
-			ShowcaseTournaments.removeFromParticipationInfoMap({
+			ShowcaseTournaments.removeFromCached({
 				tournamentId,
 				type: "organizer",
 				userId: data.userId,

@@ -1,8 +1,6 @@
 import { sub } from "date-fns";
 import { sql } from "kysely";
 import { jsonArrayFrom, jsonObjectFrom } from "kysely/helpers/sqlite";
-import { nanoid } from "nanoid";
-import { INVITE_CODE_LENGTH } from "~/constants";
 import { db } from "~/db/sql";
 import type {
 	Tables,
@@ -10,6 +8,7 @@ import type {
 	UserMapModePreferences,
 } from "~/db/tables";
 import { databaseTimestampNow, dateToDatabaseTimestamp } from "~/utils/dates";
+import { shortNanoid } from "~/utils/id";
 import { COMMON_USER_FIELDS } from "~/utils/kysely.server";
 import { userIsBanned } from "../ban/core/banned.server";
 import type { LookingGroupWithInviteCode } from "./q-types";
@@ -165,8 +164,8 @@ export function createGroup(args: CreateGroupArgs) {
 		const createdGroup = await trx
 			.insertInto("Group")
 			.values({
-				inviteCode: nanoid(INVITE_CODE_LENGTH),
-				chatCode: nanoid(INVITE_CODE_LENGTH),
+				inviteCode: shortNanoid(),
+				chatCode: shortNanoid(),
 				status: args.status,
 			})
 			.returning("id")
@@ -205,7 +204,7 @@ export async function createGroupFromPrevious(
 					.select((eb) => [
 						"Group.teamId",
 						"Group.chatCode",
-						eb.val(nanoid(INVITE_CODE_LENGTH)).as("inviteCode"),
+						eb.val(shortNanoid()).as("inviteCode"),
 						eb.val("PREPARING").as("status"),
 					])
 					.where("Group.id", "=", args.previousGroupId),
@@ -278,6 +277,10 @@ export function deletePrivateUserNote({
 		.execute();
 }
 
+/**
+ * Retrieves information about users who have trusted the specified user,
+ * including their associated teams and explicit trust relationships. Banned users are excluded.
+ */
 export async function usersThatTrusted(userId: number) {
 	const teams = await db
 		.selectFrom("TeamMemberWithSecondary")

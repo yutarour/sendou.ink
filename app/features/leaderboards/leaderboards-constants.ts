@@ -1,5 +1,8 @@
-import { mainWeaponIds, weaponCategories } from "~/modules/in-game-lists";
 import { rankedModesShort } from "~/modules/in-game-lists/modes";
+import {
+	mainWeaponIds,
+	weaponCategories,
+} from "~/modules/in-game-lists/weapon-ids";
 
 export const MATCHES_COUNT_NEEDED_FOR_LEADERBOARD = 7;
 export const DEFAULT_LEADERBOARD_MAX_SIZE = 500;
@@ -27,3 +30,6 @@ export const LEADERBOARD_TYPES = [
 export const IGNORED_TEAMS: Map<number, number[][]> = new Map().set(5, [
 	[9403, 13562, 15916, 38062], // Snooze
 ]);
+
+export const TYPE_SEARCH_PARAM_KEY = "type";
+export const SEASON_SEARCH_PARAM_KEY = "season";

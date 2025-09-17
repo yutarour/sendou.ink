@@ -1,3 +1,4 @@
+import type { TierName } from "~/features/mmr/mmr-constants";
 import type { DataTypes, ValueToArray } from "~/modules/brackets-manager/types";
 
 /** GET /api/user/{userId|discordId} */
@@ -34,7 +35,35 @@ export interface GetUserResponse {
 	plusServerTier: 1 | 2 | 3 | null;
 	weaponPool: Array<ProfileWeapon>;
 	badges: Array<Badge>;
+	/** Teams user is member of. The main team is always first in the array. */
+	teams: Array<GlobalTeamMembership>;
 	peakXp: number | null;
+	/** Users current (or previous if it's off-season) ranked season (SendouQ & ranked tournaments) rank. Null if no rank for the season in question or the season does not have yet enough players on the leaderboard. */
+	currentRank: SeasonalRank | null;
+}
+
+/** GET /api/team/{teamId} */
+
+export interface GetTeamResponse {
+	id: number;
+	/**
+	 * Name of the global team.
+	 *
+	 * @example "Moonlight"
+	 */
+	name: string;
+	/**
+	 * URL for the global team page.
+	 *
+	 * @example "https://sendou.ink/t/moonlight"
+	 */
+	teamPageUrl: string;
+	/**
+	 * URL for the global team logo.
+	 *
+	 * @example "https://sendou.nyc3.cdn.digitaloceanspaces.com/pickup-logo-uReSb1b1XS3TWGLCKMDUD-1719054364813.webp"
+	 */
+	logoUrl: string | null;
 }
 
 /** GET /api/calendar/{year}/{week} */
@@ -54,6 +83,34 @@ export type GetCalendarWeekResponse = Array<{
 	 */
 	startTime: string;
 }>;
+
+/** GET /api/sendouq/active-match/{userId} */
+
+export interface GetUsersActiveSendouqMatchResponse {
+	/** The user's current match ID or null if none */
+	matchId: number | null;
+}
+
+/** GET /api/sendouq/match/{matchId} */
+
+export interface GetSendouqMatchResponse {
+	teamAlpha: SendouqMatchTeam | null;
+	teamBravo: SendouqMatchTeam | null;
+	mapList: Array<MapListMap>;
+}
+
+type SendouqMatchTeam = {
+	score: number;
+	players: Array<SendouqMatchPlayer>;
+};
+
+type SendouqMatchPlayer = {
+	userId: number;
+	/** User's at the start time of the match */
+	rank: SendouQRank | null;
+};
+
+type SendouQRank = { name: TierName; isPlus: boolean };
 
 /** GET /api/tournament/{tournamentId} */
 
@@ -142,6 +199,10 @@ export type GetTournamentTeamsResponse = Array<{
 		 * @example "https://cdn.discordapp.com/avatars/79237403620945920/6fc41a44b069a0d2152ac06d1e496c6c.png"
 		 */
 		avatarUrl: string | null;
+		/**
+		 * @example "FI"
+		 */
+		country: string | null;
 		captain: boolean;
 		/**
 		 * Splatoon 3 splashtag name & ID. Notice the value returned is the player's set name at the time of the tournament.
@@ -161,6 +222,13 @@ export type GetTournamentTeamsResponse = Array<{
 		 */
 		joinedAt: string;
 	}>;
+}>;
+
+/** GET /api/tournament/{tournamentId}/players */
+
+export type GetTournamentPlayersResponse = Array<{
+	userId: number;
+	matchIds: number[];
 }>;
 
 /** GET /api/tournament/{tournamentId}/casted */
@@ -296,6 +364,53 @@ type Weapon = {
 
 type ProfileWeapon = Weapon & { isFiveStar: boolean };
 
+interface GlobalTeamMembership {
+	/**
+	 * ID for the global team page.
+	 */
+	id: number;
+	/**
+	 * Role of the user in the team.
+	 */
+	role: TeamMemberRole | null;
+}
+
+type TeamMemberRole =
+	| "CAPTAIN"
+	| "CO_CAPTAIN"
+	| "FRONTLINE"
+	| "SLAYER"
+	| "SKIRMISHER"
+	| "SUPPORT"
+	| "MIDLINE"
+	| "BACKLINE"
+	| "FLEX"
+	| "SUB"
+	| "COACH"
+	| "CHEERLEADER";
+
+interface SeasonalRank {
+	tier: {
+		name: RankTierName;
+		isPlus: boolean;
+	};
+	/**
+	 * Which season this rank is for.
+	 *
+	 * @example 7
+	 */
+	season: number;
+}
+
+type RankTierName =
+	| "LEVIATHAN"
+	| "DIAMOND"
+	| "PLATINUM"
+	| "GOLD"
+	| "SILVER"
+	| "BRONZE"
+	| "IRON";
+
 type Badge = {
 	/**
 	 * @example "Monday Afterparty"
@@ -323,7 +438,7 @@ type StageWithMode = {
 	stage: Stage;
 };
 
-type MapListMap = {
+export type MapListMap = {
 	map: StageWithMode;
 	/**
 	 * One of the following:
@@ -337,6 +452,8 @@ type MapListMap = {
 	source: number | "DEFAULT" | "TIEBREAKER" | "BOTH" | "TO" | "COUNTERPICK";
 	winnerTeamId: number | null;
 	participatedUserIds: Array<number> | null;
+	/** (round robin only) points of the match used for tiebreaker purposes. e.g. [100, 0] indicates a knockout. */
+	points: [number, number] | null;
 };
 
 type TournamentMatchTeam = {

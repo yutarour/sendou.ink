@@ -3,21 +3,22 @@ import clsx from "clsx";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "~/components/Avatar";
-import { Button, LinkButton } from "~/components/Button";
 import { Divider } from "~/components/Divider";
+import { LinkButton, SendouButton } from "~/components/elements/Button";
+import { SendouDialog } from "~/components/elements/Dialog";
+import { UserSearch } from "~/components/elements/UserSearch";
 import { FormMessage } from "~/components/FormMessage";
 import { FormWithConfirm } from "~/components/FormWithConfirm";
 import { Input } from "~/components/Input";
+import { TrashIcon } from "~/components/icons/Trash";
 import { Label } from "~/components/Label";
 import { containerClassName } from "~/components/Main";
 import { Redirect } from "~/components/Redirect";
 import { SubmitButton } from "~/components/SubmitButton";
-import { UserSearch } from "~/components/UserSearch";
-import { TrashIcon } from "~/components/icons/Trash";
-import { USER } from "~/constants";
 import { useUser } from "~/features/auth/core/user";
 import * as Progression from "~/features/tournament-bracket/core/Progression";
 import type { TournamentData } from "~/features/tournament-bracket/core/Tournament.server";
+import { USER } from "~/features/user-page/user-page-constants";
 import { databaseTimestampToDate } from "~/utils/dates";
 import invariant from "~/utils/invariant";
 import { assertUnreachable } from "~/utils/types";
@@ -27,12 +28,10 @@ import {
 	tournamentEditPage,
 	tournamentPage,
 } from "~/utils/urls";
-import { Dialog } from "../../../components/Dialog";
 import { BracketProgressionSelector } from "../../calendar/components/BracketProgressionSelector";
 import { useTournament } from "./to.$id";
 
-import { action } from "../actions/to.$id.admin.server";
-export { action };
+export { action } from "../actions/to.$id.admin.server";
 
 export default function TournamentAdminPage() {
 	const { t } = useTranslation(["calendar"]);
@@ -46,7 +45,7 @@ export default function TournamentAdminPage() {
 		setEditingProgression(false);
 	}, [tournament]);
 
-	if (!tournament.isOrganizer(user) || tournament.everyBracketOver) {
+	if (!tournament.isOrganizer(user) || tournament.ctx.isFinalized) {
 		return <Redirect to={tournamentPage(tournament.ctx.id)} />;
 	}
 
@@ -56,7 +55,7 @@ export default function TournamentAdminPage() {
 				<div className="stack horizontal items-end">
 					<LinkButton
 						to={tournamentEditPage(tournament.ctx.eventId)}
-						size="tiny"
+						size="small"
 						variant="outlined"
 						testId="edit-event-info-button"
 					>
@@ -70,14 +69,14 @@ export default function TournamentAdminPage() {
 							action={calendarEventPage(tournament.ctx.eventId)}
 							submitButtonTestId="delete-submit-button"
 						>
-							<Button
+							<SendouButton
 								className="ml-auto"
-								size="tiny"
+								size="small"
 								variant="minimal-destructive"
 								type="submit"
 							>
 								{t("calendar:actions.delete")}
-							</Button>
+							</SendouButton>
 						</FormWithConfirm>
 					) : null}
 				</div>
@@ -86,14 +85,14 @@ export default function TournamentAdminPage() {
 			tournament.hasStarted &&
 			!tournament.ctx.isFinalized ? (
 				<div className="stack horizontal justify-end">
-					<Button
-						onClick={() => setEditingProgression(true)}
-						size="tiny"
+					<SendouButton
+						onPress={() => setEditingProgression(true)}
+						size="small"
 						variant="outlined"
-						testId="edit-event-info-button"
+						data-testid="edit-event-info-button"
 					>
 						Edit brackets
-					</Button>
+					</SendouButton>
 					{editingProgression ? (
 						<BracketProgressionEditDialog
 							close={() => setEditingProgression(false)}
@@ -323,8 +322,7 @@ function TeamActions() {
 				) : null}
 				{selectedAction.inputs.includes("USER") ? (
 					<div>
-						<label htmlFor="user">User</label>
-						<UserSearch inputName="userId" id="user" />
+						<UserSearch name="userId" label="User" />
 					</div>
 				) : null}
 				{selectedAction.inputs.includes("BRACKET") ? (
@@ -421,39 +419,29 @@ function CastTwitchAccounts() {
 
 function StaffAdder() {
 	const fetcher = useFetcher();
-	const tournament = useTournament();
 
 	return (
 		<fetcher.Form method="post" className="stack sm">
-			<div className="stack horizontal sm flex-wrap items-end">
+			<div className="stack horizontal sm flex-wrap items-start">
 				<div>
-					<Label htmlFor="staff-user">New staffer</Label>
-					<UserSearch
-						inputName="userId"
-						id="staff-user"
-						required
-						userIdsToOmit={
-							new Set([
-								tournament.ctx.author.id,
-								...tournament.ctx.staff.map((s) => s.id),
-							])
-						}
-					/>
+					<UserSearch name="userId" label="New staffer" isRequired />
 				</div>
-				<div>
-					<Label htmlFor="staff-role">Role</Label>
-					<select name="role" id="staff-role" className="w-max">
-						<option value="ORGANIZER">Organizer</option>
-						<option value="STREAMER">Streamer</option>
-					</select>
+				<div className="stack horizontal sm items-end">
+					<div>
+						<Label htmlFor="staff-role">Role</Label>
+						<select name="role" id="staff-role" className="w-max">
+							<option value="ORGANIZER">Organizer</option>
+							<option value="STREAMER">Streamer</option>
+						</select>
+					</div>
+					<SubmitButton
+						state={fetcher.state}
+						_action="ADD_STAFF"
+						testId="add-staff-button"
+					>
+						Add
+					</SubmitButton>
 				</div>
-				<SubmitButton
-					state={fetcher.state}
-					_action="ADD_STAFF"
-					testId="add-staff-button"
-				>
-					Add
-				</SubmitButton>
 			</div>
 			<FormMessage type="info">
 				Organizer has same permissions as you expect adding/removing staff,
@@ -506,15 +494,15 @@ function RemoveStaffButton({
 				["userId", staff.id],
 				["_action", "REMOVE_STAFF"],
 			]}
-			deleteButtonText="Remove"
+			submitButtonText="Remove"
 		>
-			<Button
+			<SendouButton
 				variant="minimal-destructive"
-				size="tiny"
+				size="small"
 				data-testid="remove-staff-button"
 			>
-				<TrashIcon className="build__icon" />
-			</Button>
+				<TrashIcon className="small-icon" />
+			</SendouButton>
 		</FormWithConfirm>
 	);
 }
@@ -626,9 +614,9 @@ function DownloadParticipants() {
 	return (
 		<div>
 			<div className="stack horizontal sm flex-wrap">
-				<Button
-					size="tiny"
-					onClick={() =>
+				<SendouButton
+					size="small"
+					onPress={() =>
 						handleDownload({
 							filename: "all-participants.txt",
 							content: allParticipantsContent(),
@@ -636,10 +624,10 @@ function DownloadParticipants() {
 					}
 				>
 					All participants
-				</Button>
-				<Button
-					size="tiny"
-					onClick={() =>
+				</SendouButton>
+				<SendouButton
+					size="small"
+					onPress={() =>
 						handleDownload({
 							filename: "checked-in-participants.txt",
 							content: checkedInParticipantsContent(),
@@ -647,10 +635,10 @@ function DownloadParticipants() {
 					}
 				>
 					Checked in participants
-				</Button>
-				<Button
-					size="tiny"
-					onClick={() =>
+				</SendouButton>
+				<SendouButton
+					size="small"
+					onPress={() =>
 						handleDownload({
 							filename: "not-checked-in-participants.txt",
 							content: notCheckedInParticipantsContent(),
@@ -658,10 +646,10 @@ function DownloadParticipants() {
 					}
 				>
 					Not checked in participants
-				</Button>
-				<Button
-					size="tiny"
-					onClick={() =>
+				</SendouButton>
+				<SendouButton
+					size="small"
+					onPress={() =>
 						handleDownload({
 							filename: "teams-in-seeded-order.txt",
 							content: simpleListInSeededOrder(),
@@ -669,11 +657,11 @@ function DownloadParticipants() {
 					}
 				>
 					Simple list in seeded order
-				</Button>
+				</SendouButton>
 				{tournament.isLeagueSignup ? (
-					<Button
-						size="tiny"
-						onClick={() =>
+					<SendouButton
+						size="small"
+						onPress={() =>
 							handleDownload({
 								filename: "league-format.csv",
 								content: leagueFormat(),
@@ -681,7 +669,7 @@ function DownloadParticipants() {
 						}
 					>
 						League format
-					</Button>
+					</SendouButton>
 				) : null}
 			</div>
 		</div>
@@ -756,7 +744,7 @@ function BracketReset() {
 				<SubmitButton
 					_action="RESET_BRACKET"
 					state={fetcher.state}
-					disabled={confirmText !== bracketToDeleteName}
+					isDisabled={confirmText !== bracketToDeleteName}
 					testId="reset-bracket-button"
 				>
 					Reset
@@ -782,7 +770,11 @@ function BracketProgressionEditDialog({ close }: { close: () => void }) {
 		.map((bracket) => bracket.idx);
 
 	return (
-		<Dialog isOpen className="w-max">
+		<SendouDialog
+			isFullScreen
+			onClose={close}
+			heading="Editing bracket progression"
+		>
 			<fetcher.Form method="post">
 				<BracketProgressionSelector
 					initialBrackets={Progression.validatedBracketsToInputFormat(
@@ -798,15 +790,12 @@ function BracketProgressionEditDialog({ close }: { close: () => void }) {
 				<div className="stack md horizontal justify-center mt-6">
 					<SubmitButton
 						_action="UPDATE_TOURNAMENT_PROGRESSION"
-						disabled={bracketProgressionErrored}
+						isDisabled={bracketProgressionErrored}
 					>
 						Save changes
 					</SubmitButton>
-					<Button variant="destructive" onClick={close}>
-						Cancel
-					</Button>
 				</div>
 			</fetcher.Form>
-		</Dialog>
+		</SendouDialog>
 	);
 }

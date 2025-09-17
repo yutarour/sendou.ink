@@ -1,8 +1,4 @@
-import type {
-	LoaderFunctionArgs,
-	MetaFunction,
-	SerializeFrom,
-} from "@remix-run/node";
+import type { MetaFunction, SerializeFrom } from "@remix-run/node";
 import {
 	Outlet,
 	type ShouldRevalidateFunction,
@@ -12,15 +8,11 @@ import {
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { Main } from "~/components/Main";
+import { Placeholder } from "~/components/Placeholder";
 import { SubNav, SubNavLink } from "~/components/SubNav";
 import { useUser } from "~/features/auth/core/user";
-import { getUser } from "~/features/auth/core/user.server";
 import { Tournament } from "~/features/tournament-bracket/core/Tournament";
-import { tournamentDataCached } from "~/features/tournament-bracket/core/Tournament.server";
-import * as TournamentRepository from "~/features/tournament/TournamentRepository.server";
 import { useIsMounted } from "~/hooks/useIsMounted";
-import { isAdmin } from "~/permissions";
-import { databaseTimestampToDate } from "~/utils/dates";
 import type { SendouRouteHandle } from "~/utils/remix.server";
 import { removeMarkdown } from "~/utils/strings";
 import { assertUnreachable } from "~/utils/types";
@@ -29,19 +21,21 @@ import {
 	tournamentOrganizationPage,
 	tournamentPage,
 	tournamentRegisterPage,
-	userSubmittedImage,
 } from "~/utils/urls";
+import { userSubmittedImage } from "~/utils/urls-img";
 import { metaTags } from "../../../utils/remix";
-import { streamsByTournamentId } from "../core/streams.server";
-import { tournamentIdFromParams } from "../tournament-utils";
 
-import "../tournament.css";
-import "~/styles/maps.css";
+import { loader, type TournamentLoaderData } from "../loaders/to.$id.server";
+export { loader };
+
 import "~/styles/calendar-event.css";
+import "../tournament.css";
 
 export const shouldRevalidate: ShouldRevalidateFunction = (args) => {
 	const navigatedToMatchPage =
-		typeof args.nextParams.mid === "string" && args.formMethod !== "POST";
+		typeof args.nextParams.mid === "string" &&
+		args.formMethod !== "POST" &&
+		args.currentParams.mid !== args.nextParams.mid;
 
 	if (navigatedToMatchPage) return false;
 
@@ -99,55 +93,6 @@ export const handle: SendouRouteHandle = {
 	},
 };
 
-export type TournamentLoaderData = SerializeFrom<typeof loader>;
-
-export const loader = async ({ params, request }: LoaderFunctionArgs) => {
-	const user = await getUser(request);
-	const tournamentId = tournamentIdFromParams(params);
-
-	const tournament = await tournamentDataCached({ tournamentId, user });
-
-	const streams =
-		tournament.data.stage.length > 0 && !tournament.ctx.isFinalized
-			? await streamsByTournamentId(tournament.ctx)
-			: [];
-
-	const tournamentStartedInTheLastMonth =
-		databaseTimestampToDate(tournament.ctx.startTime) >
-		new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-	const isTournamentAdmin =
-		tournament.ctx.author.id === user?.id ||
-		tournament.ctx.staff.some(
-			(s) => s.role === "ORGANIZER" && s.id === user?.id,
-		) ||
-		isAdmin(user) ||
-		tournament.ctx.organization?.members.some(
-			(m) => m.userId === user?.id && m.role === "ADMIN",
-		);
-	const isTournamentOrganizer =
-		isTournamentAdmin ||
-		tournament.ctx.staff.some(
-			(s) => s.role === "ORGANIZER" && s.id === user?.id,
-		) ||
-		tournament.ctx.organization?.members.some(
-			(m) => m.userId === user?.id && m.role === "ORGANIZER",
-		);
-	const showFriendCodes = tournamentStartedInTheLastMonth && isTournamentAdmin;
-
-	return {
-		tournament,
-		streamingParticipants: streams.flatMap((s) => (s.userId ? [s.userId] : [])),
-		streamsCount: streams.length,
-		friendCodes: showFriendCodes
-			? await TournamentRepository.friendCodesByTournamentId(tournamentId)
-			: undefined,
-		preparedMaps:
-			isTournamentOrganizer && !tournament.ctx.isFinalized
-				? await TournamentRepository.findPreparedMapsById(tournamentId)
-				: undefined,
-	};
-};
-
 const TournamentContext = React.createContext<Tournament>(null!);
 
 export default function TournamentLayoutShell() {
@@ -159,7 +104,7 @@ export default function TournamentLayoutShell() {
 	if (!isMounted)
 		return (
 			<Main bigger>
-				<div className="tournament__placeholder" />
+				<Placeholder />
 			</Main>
 		);
 
@@ -178,6 +123,7 @@ export function TournamentLayout() {
 
 	// this is nice to debug with tournament in browser console
 	if (process.env.NODE_ENV === "development") {
+		// biome-ignore lint/correctness/useHookAtTopLevel: process.env.NODE_ENV is a constant
 		React.useEffect(() => {
 			// @ts-expect-error for dev purposes
 			window.tourney = tournament;
@@ -270,7 +216,7 @@ export function TournamentLayout() {
 					!tournament.isLeagueSignup && (
 						<SubNavLink to="seeds">{t("tournament:tabs.seeds")}</SubNavLink>
 					)}
-				{tournament.isOrganizer(user) && !tournament.everyBracketOver && (
+				{tournament.isOrganizer(user) && !tournament.ctx.isFinalized && (
 					<SubNavLink to="admin" data-testid="admin-tab">
 						{t("tournament:tabs.admin")}
 					</SubNavLink>

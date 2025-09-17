@@ -1,13 +1,12 @@
-import clone from "just-clone";
 import type { Tables } from "~/db/tables";
-import type { Group } from "~/db/types";
 import { TIERS } from "~/features/mmr/mmr-constants";
 import { defaultOrdinal } from "~/features/mmr/mmr-utils";
 import type {
 	SkillTierInterval,
 	TieredSkill,
 } from "~/features/mmr/tiered.server";
-import { modesShort } from "~/modules/in-game-lists";
+import { mapModePreferencesToModeList } from "~/features/sendouq-match/core/match.server";
+import { modesShort } from "~/modules/in-game-lists/modes";
 import { databaseTimestampToDate } from "~/utils/dates";
 import invariant from "~/utils/invariant";
 import { FULL_GROUP_SIZE } from "../q-constants";
@@ -19,7 +18,6 @@ import type {
 	LookingGroupWithInviteCode,
 } from "../q-types";
 import type { RecentMatchPlayer } from "../queries/findRecentMatchPlayersByUserId.server";
-import { mapModePreferencesToModeList } from "./match.server";
 
 export function divideGroups({
 	groups,
@@ -33,7 +31,7 @@ export function divideGroups({
 		"likerGroupId" | "targetGroupId" | "isRechallenge"
 	>[];
 }): DividedGroupsUncensored {
-	let own: LookingGroupWithInviteCode | undefined = undefined;
+	let own: LookingGroupWithInviteCode | undefined;
 	const neutral: LookingGroupWithInviteCode[] = [];
 	const likesReceived: LookingGroupWithInviteCode[] = [];
 
@@ -468,7 +466,7 @@ function resolveGroupSkill({
 }
 
 export function groupExpiryStatus(
-	group?: Pick<Group, "latestActionAt">,
+	group?: Pick<Tables["Group"], "latestActionAt">,
 ): null | GroupExpiryStatus {
 	if (!group) return null;
 
@@ -476,7 +474,7 @@ export function groupExpiryStatus(
 	const groupExpiresAt =
 		databaseTimestampToDate(group.latestActionAt).getTime() + 30 * 60 * 1000;
 
-	const now = new Date().getTime();
+	const now = Date.now();
 
 	if (now > groupExpiresAt) {
 		return "EXPIRED";
@@ -524,7 +522,7 @@ export function tierDifferenceToRangeOrExact({
 	tier: TieredSkill["tier"] | [TieredSkill["tier"], TieredSkill["tier"]];
 } {
 	if (ourTier.name === theirTier.name && ourTier.isPlus === theirTier.isPlus) {
-		return { diff: 0, tier: clone(ourTier) };
+		return { diff: 0, tier: structuredClone(ourTier) };
 	}
 
 	const tiers = hasLeviathan
@@ -546,11 +544,14 @@ export function tierDifferenceToRangeOrExact({
 	const upperBound = tier1Idx + idxDiff;
 
 	if (lowerBound < 0 || upperBound >= tiers.length) {
-		return { diff: idxDiff, tier: clone(theirTier) };
+		return { diff: idxDiff, tier: structuredClone(theirTier) };
 	}
 
 	const lowerTier = tiers[lowerBound];
 	const upperTier = tiers[upperBound];
 
-	return { diff: idxDiff, tier: [clone(lowerTier), clone(upperTier)] };
+	return {
+		diff: idxDiff,
+		tier: [structuredClone(lowerTier), structuredClone(upperTier)],
+	};
 }

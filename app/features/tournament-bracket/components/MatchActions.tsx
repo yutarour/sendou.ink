@@ -1,16 +1,16 @@
 import { Form, useFetcher, useLoaderData } from "@remix-run/react";
 import * as React from "react";
-import { Button } from "~/components/Button";
+import { SendouButton } from "~/components/elements/Button";
+import { EditIcon } from "~/components/icons/Edit";
 import { Label } from "~/components/Label";
 import { SubmitButton } from "~/components/SubmitButton";
-import { EditIcon } from "~/components/icons/Edit";
 import { useUser } from "~/features/auth/core/user";
 import { useTournament } from "~/features/tournament/routes/to.$id";
 import { resolveLeagueRoundStartDate } from "~/features/tournament/tournament-utils";
 import invariant from "~/utils/invariant";
 import * as PickBan from "../core/PickBan";
 import type { TournamentDataTeam } from "../core/Tournament.server";
-import type { TournamentMatchLoaderData } from "../routes/to.$id.matches.$mid";
+import type { TournamentMatchLoaderData } from "../loaders/to.$id.matches.$mid.server";
 import {
 	isSetOverByScore,
 	matchIsLocked,
@@ -93,7 +93,7 @@ export function MatchActions({
 		scores[1] + (winnerId === teams[1].id ? 1 : 0),
 	];
 	const wouldEndSet = isSetOverByScore({
-		count: data.match.roundMaps?.count ?? data.match.bestOf,
+		count: data.match.roundMaps.count,
 		countType: data.match.roundMaps?.type ?? "BEST_OF",
 		scores: newScore,
 	});
@@ -336,10 +336,10 @@ function ReportScoreButtons({
 				</div>
 			) : null}
 			<SubmitButton
-				size="tiny"
+				size="small"
 				_action="REPORT_SCORE"
 				testId="report-score-button"
-				disabled={submitButtonDisabled()}
+				isDisabled={submitButtonDisabled()}
 			>
 				{wouldEndSet ? "Report & end set" : "Report"}
 			</SubmitButton>
@@ -380,37 +380,37 @@ function EditScoreForm({
 					<input type="hidden" name="points" value={JSON.stringify(points)} />
 				) : undefined}
 				<SubmitButton
-					size="tiny"
+					size="small"
 					state={fetcher.state}
 					_action="UPDATE_REPORTED_SCORE"
-					disabled={submitDisabled}
+					isDisabled={submitDisabled}
 					testId="save-revise-button"
 				>
 					Save
 				</SubmitButton>
-				<Button
+				<SendouButton
 					variant="destructive"
-					size="tiny"
-					onClick={() => setEditing(false)}
+					size="small"
+					onPress={() => setEditing(false)}
 				>
 					Cancel
-				</Button>
+				</SendouButton>
 			</fetcher.Form>
 		);
 	}
 
 	return (
 		<div className="mt-6">
-			<Button
+			<SendouButton
 				icon={<EditIcon />}
 				variant="outlined"
-				size="tiny"
+				size="small"
 				className="mx-auto"
-				onClick={() => setEditing(true)}
-				testId="revise-button"
+				onPress={() => setEditing(true)}
+				data-testid="revise-button"
 			>
 				Edit
-			</Button>
+			</SendouButton>
 		</div>
 	);
 }

@@ -2,7 +2,6 @@ export function BattlefyIcon() {
 	return (
 		<svg
 			version="1.1"
-			id="Layer_1"
 			xmlns="http://www.w3.org/2000/svg"
 			xmlnsXlink="http://www.w3.org/1999/xlink"
 			x="0px"
@@ -11,7 +10,6 @@ export function BattlefyIcon() {
 			enableBackground="new 0 0 1152 1152"
 			xmlSpace="preserve"
 		>
-			<title>Battlefy Icon</title>
 			<path
 				display="none"
 				fill="#151B27"

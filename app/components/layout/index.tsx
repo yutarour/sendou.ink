@@ -4,10 +4,11 @@ import * as React from "react";
 import { useTranslation } from "react-i18next";
 import type { RootLoaderData } from "~/root";
 import type { Breadcrumb, SendouRouteHandle } from "~/utils/remix.server";
-import { Button } from "../Button";
+import { SendouButton } from "../elements/Button";
 import { Image } from "../Image";
 import { HamburgerIcon } from "../icons/Hamburger";
 import { Footer } from "./Footer";
+import styles from "./index.module.css";
 import { NavDialog } from "./NavDialog";
 import { TopRightButtons } from "./TopRightButtons";
 
@@ -31,7 +32,7 @@ function useBreadcrumbs() {
 	}, [matches, t]);
 }
 
-export const Layout = React.memo(function Layout({
+export function Layout({
 	children,
 	data,
 	isErrored = false,
@@ -48,17 +49,17 @@ export const Layout = React.memo(function Layout({
 
 	const showLeaderboard =
 		import.meta.env.VITE_PLAYWIRE_PUBLISHER_ID &&
-		!data?.user?.patronTier &&
+		!data?.user?.roles.includes("MINOR_SUPPORT") &&
 		!location.pathname.includes("plans");
 	return (
 		<div className="layout__container">
 			<NavDialog isOpen={navDialogOpen} close={() => setNavDialogOpen(false)} />
 			{isFrontPage ? (
-				<Button
+				<SendouButton
 					icon={<HamburgerIcon />}
-					className="layout__hamburger-fab"
+					className={clsx(styles.hamburger, styles.fab)}
 					variant="outlined"
-					onClick={() => setNavDialogOpen(true)}
+					onPress={() => setNavDialogOpen(true)}
 				/>
 			) : null}
 			<header className="layout__header layout__item_size">
@@ -81,7 +82,7 @@ export const Layout = React.memo(function Layout({
 				<TopRightButtons
 					isErrored={isErrored}
 					showSupport={Boolean(
-						data && typeof data?.user?.patronTier !== "number" && isFrontPage,
+						data && !data?.user?.roles.includes("MINOR_SUPPORT") && isFrontPage,
 					)}
 					openNavDialog={() => setNavDialogOpen(true)}
 				/>
@@ -91,7 +92,7 @@ export const Layout = React.memo(function Layout({
 			<Footer />
 		</div>
 	);
-});
+}
 
 function BreadcrumbLink({ data }: { data: Breadcrumb }) {
 	if (data.type === "IMAGE") {
@@ -138,6 +139,7 @@ function BreadcrumbLink({ data }: { data: Breadcrumb }) {
 		</Link>
 	);
 }
-const MyRampUnit = React.memo(function MyRampUnit() {
+
+function MyRampUnit() {
 	return <div className="top-leaderboard" id="pw-leaderboard_atf" />;
-});
+}

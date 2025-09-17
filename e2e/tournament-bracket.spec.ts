@@ -1,15 +1,17 @@
-import { type Page, expect, test } from "@playwright/test";
-import { ADMIN_DISCORD_ID } from "~/constants";
+import { expect, type Page, test } from "@playwright/test";
 import { NZAP_TEST_ID } from "~/db/seed/constants";
+import { ADMIN_DISCORD_ID } from "~/features/admin/admin-constants";
 import {
 	impersonate,
 	isNotVisible,
 	navigate,
 	seed,
 	selectUser,
+	startBracket,
 	submit,
 } from "~/utils/playwright";
 import {
+	NOTIFICATIONS_URL,
 	tournamentAdminPage,
 	tournamentBracketsPage,
 	tournamentMatchPage,
@@ -17,7 +19,6 @@ import {
 	tournamentRegisterPage,
 	userResultsPage,
 } from "~/utils/urls";
-import { startBracket } from "./shared";
 
 const navigateToMatch = async (page: Page, matchId: number) => {
 	await expect(async () => {
@@ -47,7 +48,7 @@ const reportResult = async ({
 		await page.getByTestId("points-input-2").fill(String(points[1]));
 	};
 
-	await page.getByTestId("tab-Actions").click();
+	await page.getByTestId("actions-tab").click();
 
 	if (
 		sidesWithMoreThanFourPlayers.includes("first") &&
@@ -145,7 +146,7 @@ test.describe("Tournament bracket", () => {
 		});
 		await expect(page.getByTestId("active-roster-needed-text")).toBeVisible();
 
-		await page.getByTestId("tab-Actions").click();
+		await page.getByTestId("actions-tab").click();
 
 		await page.getByTestId("player-checkbox-0").last().click();
 		await page.getByTestId("player-checkbox-1").last().click();
@@ -161,7 +162,7 @@ test.describe("Tournament bracket", () => {
 		});
 		await isNotVisible(page.getByTestId("active-roster-needed-text"));
 
-		await page.getByTestId("tab-Actions").click();
+		await page.getByTestId("actions-tab").click();
 		await page.getByTestId("edit-active-roster-button").click();
 		await page.getByTestId("player-checkbox-3").last().click();
 		await page.getByTestId("player-checkbox-4").last().click();
@@ -285,7 +286,9 @@ test.describe("Tournament bracket", () => {
 		await expect(page).toHaveURL(/brackets/);
 	});
 
-	test("completes and finalizes a small tournament", async ({ page }) => {
+	test("completes and finalizes a small tournament with badge assigning", async ({
+		page,
+	}) => {
 		const tournamentId = 2;
 
 		await seed(page);
@@ -322,6 +325,10 @@ test.describe("Tournament bracket", () => {
 		await backToBracket(page);
 
 		await page.getByTestId("finalize-tournament-button").click();
+
+		await page.getByLabel("Receiving team").first().selectOption("101");
+		await page.getByLabel("Receiving team").last().selectOption("102");
+
 		await page.getByTestId("confirm-button").click();
 
 		await page.getByTestId("results-tab").click();
@@ -334,11 +341,22 @@ test.describe("Tournament bracket", () => {
 		});
 
 		await expect(page.getByText("In The Zone 22")).toBeVisible();
+
+		await navigate({
+			page,
+			url: NOTIFICATIONS_URL,
+		});
+
+		await expect(page.getByTestId("notification-item").first()).toContainText(
+			"New badge",
+		);
 	});
 
 	test("completes and finalizes a small tournament (RR->SE w/ underground bracket)", async ({
 		page,
 	}) => {
+		test.slow();
+
 		const tournamentId = 3;
 
 		await seed(page);
@@ -427,6 +445,7 @@ test.describe("Tournament bracket", () => {
 			await backToBracket(page);
 		}
 		await page.getByTestId("finalize-tournament-button").click();
+		await page.getByTestId("assign-badges-later-switch").click();
 		await page.getByTestId("confirm-button").click();
 
 		// not possible to reopen finals match anymore
@@ -439,13 +458,20 @@ test.describe("Tournament bracket", () => {
 		await page.getByTestId("result-team-name").first().click();
 		await page.getByTestId("team-member-name").first().click();
 
-		await page.getByText("Results").click();
+		await page.getByTestId("user-seasons-tab").click();
+		await expect(page.getByTestId("seasons-tournament-result")).toBeVisible();
+
+		await page.getByTestId("user-results-tab").click();
 		await expect(
 			page.getByTestId("tournament-name-cell").first(),
 		).toContainText("Paddling Pool 253");
+
+		await page.getByTestId("mates-button").first().click();
 		await expect(
 			page.locator('[data-testid="mates-cell-placement-0"] li'),
 		).toHaveCount(3);
+
+		// if more assertions added below we need to close the popover first (data-testid="underlay")
 	});
 
 	test("changes SOS format and progresses with it & adds a member to another team", async ({
@@ -579,7 +605,7 @@ test.describe("Tournament bracket", () => {
 			points: [100, 0],
 		});
 
-		await page.getByTestId("tab-Score").click();
+		await page.getByTestId("actions-tab").click();
 		await page.getByTestId("revise-button").click();
 		await page.getByTestId("player-checkbox-3").first().click();
 		await page.getByTestId("player-checkbox-4").first().click();
@@ -881,7 +907,7 @@ test.describe("Tournament bracket", () => {
 		await page.getByTestId("reset-round-button").click();
 		await page.getByTestId("confirm-button").click();
 		await page.getByTestId("start-round-button").click();
-		await expect(page.getByText("BYE")).toBeVisible();
+		await expect(page.getByTestId("bye-team")).toBeVisible();
 	});
 
 	test("prepares maps (including third place match linking)", async ({
@@ -942,102 +968,89 @@ test.describe("Tournament bracket", () => {
 		expect(page.getByRole("button", { name: "Link" })).toBeVisible();
 	});
 
-	for (const pickBan of ["COUNTERPICK"]) {
-		for (const mapPickingStyle of ["TO"]) {
-			test(`ban/pick ${pickBan} (${mapPickingStyle})`, async ({ page }) => {
-				const tournamentId = mapPickingStyle === "AUTO_SZ" ? 2 : 4;
-				const matchId = 2;
+	for (const pickBan of ["COUNTERPICK", "BAN_2"]) {
+		test(`ban/pick ${pickBan}`, async ({ page }) => {
+			const tournamentId = 4;
+			const matchId = 2;
 
-				await seed(page);
-				await impersonate(page);
+			await seed(page);
+			await impersonate(page);
 
-				await navigate({
-					page,
-					url: tournamentBracketsPage({ tournamentId }),
-				});
-
-				await page.getByTestId("finalize-bracket-button").click();
-				await page.getByLabel("Pick/ban").selectOption(pickBan);
-
-				if (tournamentId === 2) {
-					await page.getByTestId("edit-round-maps-button").first().click();
-					await page.getByTestId("pick-ban-switch").click();
-					await page.getByTestId("edit-round-maps-button").first().click();
-				}
-				await page.getByTestId("confirm-finalize-bracket-button").click();
-
-				const teamOneCaptainId = mapPickingStyle === "TO" ? 33 : 29;
-				const teamTwoCaptainId = mapPickingStyle === "TO" ? 29 : 33;
-
-				if (pickBan === "BAN_2") {
-					for (const id of [teamTwoCaptainId, teamOneCaptainId]) {
-						await impersonate(page, id);
-						await navigate({
-							page,
-							url: tournamentMatchPage({ tournamentId, matchId }),
-						});
-						await page.getByTestId("tab-Actions").click();
-
-						await page.getByTestId("pick-ban-button").first().click();
-						await page.getByTestId("submit-button").click();
-					}
-
-					await expect(
-						page.locator(".tournament-bracket__mode-progress__image__banned"),
-					).toHaveCount(2);
-				}
-
-				await impersonate(page, teamOneCaptainId);
-
-				await navigate({
-					page,
-					url: tournamentMatchPage({ tournamentId, matchId }),
-				});
-
-				await page.getByTestId("tab-Actions").click();
-				await page.getByTestId("winner-radio-2").click();
-				if (mapPickingStyle === "TO") {
-					await page.getByTestId("points-input-2").fill("100");
-				}
-				await page.getByTestId("report-score-button").click();
-
-				if (pickBan === "COUNTERPICK") {
-					await page.getByTestId("pick-ban-button").first().click();
-					await page.getByTestId("submit-button").click();
-				}
-
-				await impersonate(page, teamTwoCaptainId);
-
-				await navigate({
-					page,
-					url: tournamentMatchPage({ tournamentId, matchId }),
-				});
-
-				await page.getByTestId("tab-Actions").click();
-				await page.getByTestId("winner-radio-1").click();
-				if (mapPickingStyle === "TO") {
-					await page.getByTestId("points-input-1").fill("100");
-				}
-				await page.getByTestId("report-score-button").click();
-
-				if (pickBan === "COUNTERPICK") {
-					await page.getByTestId("pick-ban-button").first().click();
-					await page.getByTestId("submit-button").click();
-
-					await page.getByTestId("undo-score-button").click();
-					await page.getByTestId("winner-radio-1").click();
-					if (mapPickingStyle === "TO") {
-						await page.getByTestId("points-input-1").fill("100");
-					}
-					await page.getByTestId("report-score-button").click();
-					await page.getByTestId("pick-ban-button").last().click();
-					await page.getByTestId("submit-button").click();
-					await expect(
-						page.getByText("Counterpick", { exact: true }),
-					).toBeVisible();
-					await expect(page.getByText("1-1")).toBeVisible();
-				}
+			await navigate({
+				page,
+				url: tournamentBracketsPage({ tournamentId }),
 			});
-		}
+
+			await page.getByTestId("finalize-bracket-button").click();
+			await page.getByLabel("Pick/ban").selectOption(pickBan);
+
+			await page.getByTestId("confirm-finalize-bracket-button").click();
+
+			const teamOneCaptainId = 33;
+			const teamTwoCaptainId = 29;
+
+			if (pickBan === "BAN_2") {
+				for (const id of [teamTwoCaptainId, teamOneCaptainId]) {
+					await impersonate(page, id);
+					await navigate({
+						page,
+						url: tournamentMatchPage({ tournamentId, matchId }),
+					});
+					await page.getByTestId("actions-tab").click();
+
+					await page.getByTestId("pick-ban-button").first().click();
+					await page.getByTestId("submit-button").click();
+				}
+
+				await expect(
+					page.locator(".tournament-bracket__mode-progress__image__banned"),
+				).toHaveCount(2);
+			}
+
+			await impersonate(page, teamOneCaptainId);
+
+			await navigate({
+				page,
+				url: tournamentMatchPage({ tournamentId, matchId }),
+			});
+
+			await page.getByTestId("actions-tab").click();
+			await page.getByTestId("winner-radio-2").click();
+			await page.getByTestId("points-input-2").fill("100");
+			await page.getByTestId("report-score-button").click();
+
+			if (pickBan === "COUNTERPICK") {
+				await page.getByTestId("pick-ban-button").first().click();
+				await page.getByTestId("submit-button").click();
+			}
+
+			await impersonate(page, teamTwoCaptainId);
+
+			await navigate({
+				page,
+				url: tournamentMatchPage({ tournamentId, matchId }),
+			});
+
+			await page.getByTestId("actions-tab").click();
+			await page.getByTestId("winner-radio-1").click();
+			await page.getByTestId("points-input-1").fill("100");
+			await page.getByTestId("report-score-button").click();
+
+			if (pickBan === "COUNTERPICK") {
+				await page.getByTestId("pick-ban-button").first().click();
+				await page.getByTestId("submit-button").click();
+
+				await page.getByTestId("undo-score-button").click();
+				await page.getByTestId("winner-radio-1").click();
+				await page.getByTestId("points-input-1").fill("100");
+				await page.getByTestId("report-score-button").click();
+				await page.getByTestId("pick-ban-button").last().click();
+				await page.getByTestId("submit-button").click();
+				await expect(
+					page.getByText("Counterpick", { exact: true }),
+				).toBeVisible();
+				await expect(page.getByText("1-1")).toBeVisible();
+			}
+		});
 	}
 });

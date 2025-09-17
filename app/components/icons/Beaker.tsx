@@ -1,7 +1,10 @@
 export function BeakerIcon({
 	className,
 	title,
-}: { className?: string; title?: string }) {
+}: {
+	className?: string;
+	title?: string;
+}) {
 	return (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
@@ -11,7 +14,7 @@ export function BeakerIcon({
 			stroke="currentColor"
 			className={className}
 		>
-			<title>{title ?? "Beaker Icon"}</title>
+			{title ? <title>{title}</title> : null}
 			<path
 				strokeLinecap="round"
 				strokeLinejoin="round"

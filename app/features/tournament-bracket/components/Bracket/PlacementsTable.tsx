@@ -1,7 +1,7 @@
 import { Link, useFetcher } from "@remix-run/react";
 import clsx from "clsx";
 import * as React from "react";
-import { Button } from "../../../../components/Button";
+import { SendouButton } from "../../../../components/elements/Button";
 import { CheckmarkIcon } from "../../../../components/icons/Checkmark";
 import { CrossIcon } from "../../../../components/icons/Cross";
 import { EditIcon } from "../../../../components/icons/Edit";
@@ -89,6 +89,8 @@ export function PlacementsTable({
 		bracket.tournament.ctx.settings.bracketProgression,
 	).map((idx) => bracket.tournament.bracketByIdx(idx)!);
 	const canEditDestination = (() => {
+		if (possibleDestinationBrackets.length === 0) return false;
+
 		const allDestinationsPreview = possibleDestinationBrackets.every(
 			(b) => b.preview,
 		);
@@ -119,20 +121,18 @@ export function PlacementsTable({
 						</th>
 					) : null}
 					{bracket.type === "swiss" ? (
-						<>
-							<th>
-								<abbr title="Opponents' set win percentage average">OW%</abbr>
-							</th>
-							<th>
-								<abbr title="Opponents' map win percentage average">
-									OW% (M)
-								</abbr>
-							</th>
-						</>
+						<th>
+							<abbr title="Opponents' set win percentage average">OW%</abbr>
+						</th>
 					) : null}
 					<th>
 						<abbr title="Map wins and losses">W/L (M)</abbr>
 					</th>
+					{bracket.type === "swiss" ? (
+						<th>
+							<abbr title="Opponents' map win percentage average">OW% (M)</abbr>
+						</th>
+					) : null}
 					{bracket.type === "round_robin" ? (
 						<th>
 							<abbr title="Score summed up">Scr</abbr>
@@ -208,20 +208,20 @@ export function PlacementsTable({
 								</td>
 							) : null}
 							{bracket.type === "swiss" ? (
-								<>
-									<td>
-										<span>{stats.opponentSetWinPercentage?.toFixed(2)}</span>
-									</td>
-									<td>
-										<span>{stats.opponentMapWinPercentage?.toFixed(2)}</span>
-									</td>
-								</>
+								<td>
+									<span>{stats.opponentSetWinPercentage?.toFixed(2)}</span>
+								</td>
 							) : null}
 							<td>
 								<span>
 									{stats.mapWins}/{stats.mapLosses}
 								</span>
 							</td>
+							{bracket.type === "swiss" ? (
+								<td>
+									<span>{stats.opponentMapWinPercentage?.toFixed(2)}</span>
+								</td>
+							) : null}
 							{bracket.type === "round_robin" ? (
 								<td>
 									<span>{stats.points}</span>
@@ -306,19 +306,17 @@ function EditableDestination({
 				</td>
 				<td>
 					<div className="stack horizontal xs">
-						<Button
+						<SendouButton
 							variant="minimal"
-							title="Save destination"
-							icon={<CheckmarkIcon />}
-							size="tiny"
-							onClick={handleSubmit}
+							icon={<CheckmarkIcon title="Save destination" />}
+							size="small"
+							onPress={handleSubmit}
 						/>
-						<Button
+						<SendouButton
 							variant="minimal-destructive"
-							title="Cancel"
-							size="tiny"
-							icon={<CrossIcon />}
-							onClick={() => setEditingDestination(false)}
+							size="small"
+							icon={<CrossIcon title="Cancel" />}
+							onPress={() => setEditingDestination(false)}
 						/>
 					</div>
 				</td>
@@ -347,12 +345,11 @@ function EditableDestination({
 			)}
 			{canEditDestination ? (
 				<td>
-					<Button
+					<SendouButton
 						variant="minimal"
-						title="Edit destination"
-						icon={<EditIcon />}
-						size="tiny"
-						onClick={() => setEditingDestination(true)}
+						icon={<EditIcon title="Edit destination" />}
+						size="small"
+						onPress={() => setEditingDestination(true)}
 					/>
 				</td>
 			) : null}

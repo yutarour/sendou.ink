@@ -1,37 +1,33 @@
+import { nanoid } from "nanoid";
+import * as R from "remeda";
+import type {
+	Ability,
+	MainWeaponId,
+	SubWeaponId,
+} from "~/modules/in-game-lists/types";
 import {
+	ANGLE_SHOOTER_ID,
 	AUTO_BOMB_ID,
-	type Ability,
 	BURST_BOMB_ID,
 	CRAB_TANK_ID,
 	CURLING_BOMB_ID,
 	FIZZY_BOMB_ID,
-	type MainWeaponId,
+	INK_MINE_ID,
+	POINT_SENSOR_ID,
 	SPLASH_WALL_ID,
 	SPLAT_BOMB_ID,
 	SPRINKLER_ID,
 	SUCTION_BOMB_ID,
-	type SubWeaponId,
+	subWeaponIds,
 	TORPEDO_ID,
 	ZIPCASTER_ID,
-	subWeaponIds,
-} from "~/modules/in-game-lists";
-import {
-	ANGLE_SHOOTER_ID,
-	INK_MINE_ID,
-	POINT_SENSOR_ID,
-} from "~/modules/in-game-lists";
+} from "~/modules/in-game-lists/weapon-ids";
 import invariant from "~/utils/invariant";
-import {
-	cutToNDecimalPlaces,
-	roundToNDecimalPlaces,
-	sumArray,
-} from "~/utils/number";
-import { semiRandomId } from "~/utils/strings";
+import { cutToNDecimalPlaces, roundToNDecimalPlaces } from "~/utils/number";
 import { assertUnreachable } from "~/utils/types";
 import {
 	DAMAGE_TYPE,
 	RAINMAKER_SPEED_PENALTY_MODIFIER,
-	multiShot,
 } from "../analyzer-constants";
 import type {
 	AbilityPoints,
@@ -51,6 +47,7 @@ import {
 	apFromMap,
 	hasEffect,
 	hpDivided,
+	weaponIdToMultiShotCount,
 	weaponParams,
 } from "./utils";
 
@@ -105,7 +102,7 @@ export function buildStats({
 				? framesToSeconds(mainWeaponParams.KeepChargeFullFrame)
 				: undefined,
 			speedType: mainWeaponParams.WeaponSpeedType ?? "Normal",
-			multiShots: multiShot[weaponSplId],
+			multiShots: weaponIdToMultiShotCount(weaponSplId),
 		},
 		stats: {
 			specialPoint: specialPoint(input),
@@ -289,7 +286,7 @@ export function fullInkTankOptions(
 			if (typeof mainWeaponInkConsume !== "number") continue;
 
 			result.push({
-				id: semiRandomId(),
+				id: nanoid(),
 				subsUsed: subsFromFullInkTank,
 				type,
 				value: effectToRounded(
@@ -463,8 +460,8 @@ function damages(args: StatFunctionInput): AnalyzedBuild["stats"]["damages"] {
 						type,
 						value: subValue.Damage / 10,
 						distance: subValue.Distance,
-						id: semiRandomId(),
-						multiShots: multiShot[args.weaponSplId],
+						id: nanoid(),
+						multiShots: weaponIdToMultiShotCount(args.weaponSplId),
 					});
 				}
 
@@ -474,15 +471,15 @@ function damages(args: StatFunctionInput): AnalyzedBuild["stats"]["damages"] {
 			if (typeof value !== "number") continue;
 
 			result.push({
-				id: semiRandomId(),
+				id: nanoid(),
 				type,
 				value: value / 10,
 				shotsToSplat: shotsToSplat({
 					value,
 					type,
-					multiShots: multiShot[args.weaponSplId],
+					multiShots: weaponIdToMultiShotCount(args.weaponSplId),
 				}),
-				multiShots: multiShot[args.weaponSplId],
+				multiShots: weaponIdToMultiShotCount(args.weaponSplId),
 			});
 		}
 	}
@@ -505,8 +502,8 @@ function specialWeaponDamages(
 						type,
 						value: subValue.Damage / 10,
 						distance: subValue.Distance,
-						id: semiRandomId(),
-						multiShots: multiShot[args.weaponSplId],
+						id: nanoid(),
+						multiShots: weaponIdToMultiShotCount(args.weaponSplId),
 					});
 				}
 
@@ -516,15 +513,15 @@ function specialWeaponDamages(
 			if (typeof value !== "number") continue;
 
 			result.push({
-				id: semiRandomId(),
+				id: nanoid(),
 				type,
 				value: value / 10,
 				shotsToSplat: shotsToSplat({
 					value,
 					type,
-					multiShots: multiShot[args.weaponSplId],
+					multiShots: weaponIdToMultiShotCount(args.weaponSplId),
 				}),
-				multiShots: multiShot[args.weaponSplId],
+				multiShots: weaponIdToMultiShotCount(args.weaponSplId),
 			});
 		}
 	}
@@ -532,9 +529,9 @@ function specialWeaponDamages(
 	// Artifically combined damages
 	if (args.mainWeaponParams.specialWeaponId === ZIPCASTER_ID) {
 		result.unshift({
-			id: semiRandomId(),
+			id: nanoid(),
 			distance: 0,
-			value: sumArray(result.map((v) => v.value)),
+			value: R.sum(result.map((v) => v.value)),
 			type: result[0].type,
 		});
 	}
@@ -545,9 +542,9 @@ function specialWeaponDamages(
 		);
 
 		result.splice(firstCannonDamageIdx, 0, {
-			id: semiRandomId(),
+			id: nanoid(),
 			distance: 0,
-			value: sumArray(cannonDamages.map((v) => v.value)),
+			value: R.sum(cannonDamages.map((v) => v.value)),
 			type: "SPECIAL_CANNON",
 		});
 	}
@@ -604,7 +601,7 @@ function subWeaponDefenseDamages(
 								params: args.subWeaponParams,
 							}),
 							distance: subValue.Distance,
-							id: semiRandomId(),
+							id: nanoid(),
 							subWeaponId: id,
 						});
 					}
@@ -612,12 +609,12 @@ function subWeaponDefenseDamages(
 					// Burst Bomb direct damage
 					if (id === BURST_BOMB_ID) {
 						arrayValues.unshift({
-							id: semiRandomId(),
+							id: nanoid(),
 							subWeaponId: id,
 							distance: 0,
-							baseValue: sumArray(arrayValues.map((v) => v.baseValue)),
+							baseValue: R.sum(arrayValues.map((v) => v.baseValue)),
 							value: cutToNDecimalPlaces(
-								sumArray(arrayValues.map((v) => v.value)),
+								R.sum(arrayValues.map((v) => v.value)),
 								1,
 							),
 							type,
@@ -639,7 +636,7 @@ function subWeaponDefenseDamages(
 
 						arrayValues = [
 							{
-								id: semiRandomId(),
+								id: nanoid(),
 								subWeaponId: id,
 								distance: [
 									Math.min(
@@ -658,7 +655,7 @@ function subWeaponDefenseDamages(
 								type,
 							},
 							{
-								id: semiRandomId(),
+								id: nanoid(),
 								subWeaponId: id,
 								distance: [
 									Math.min(
@@ -683,7 +680,7 @@ function subWeaponDefenseDamages(
 				if (typeof value !== "number") continue;
 
 				result.push({
-					id: semiRandomId(),
+					id: nanoid(),
 					type,
 					baseValue: value / 10,
 					value: subWeaponDamageValue({

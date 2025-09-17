@@ -5,35 +5,36 @@ import { MapPool } from "~/features/map-list-generator/core/map-pool";
 import { notify } from "~/features/notifications/core/notify.server";
 import * as QRepository from "~/features/sendouq/QRepository.server";
 import * as TeamRepository from "~/features/team/TeamRepository.server";
+import * as TournamentTeamRepository from "~/features/tournament/TournamentTeamRepository.server";
 import {
 	clearTournamentDataCache,
 	tournamentFromDB,
 } from "~/features/tournament-bracket/core/Tournament.server";
-import * as TournamentTeamRepository from "~/features/tournament/TournamentTeamRepository.server";
 import * as UserRepository from "~/features/user-page/UserRepository.server";
 import { logger } from "~/utils/logger";
 import {
 	errorToastIfFalsy,
-	notFoundIfFalsy,
 	parseFormData,
+	parseParams,
 	uploadImageIfSubmitted,
 } from "~/utils/remix.server";
-import { booleanToInt } from "~/utils/sql";
 import { assertUnreachable } from "~/utils/types";
+import { idObject } from "~/utils/zod";
 import { checkIn } from "../queries/checkIn.server";
 import { deleteTeam } from "../queries/deleteTeam.server";
 import deleteTeamMember from "../queries/deleteTeamMember.server";
-import { findByIdentifier } from "../queries/findByIdentifier.server";
 import { findOwnTournamentTeam } from "../queries/findOwnTournamentTeam.server";
 import { joinTeam } from "../queries/joinLeaveTeam.server";
 import { upsertCounterpickMaps } from "../queries/upsertCounterpickMaps.server";
 import { registerSchema } from "../tournament-schemas.server";
 import {
 	isOneModeTournamentOf,
-	tournamentIdFromParams,
 	validateCounterPickMapPool,
 } from "../tournament-utils";
-import { inGameNameIfNeeded } from "../tournament-utils.server";
+import {
+	inGameNameIfNeeded,
+	requireNotBannedByOrganization,
+} from "../tournament-utils.server";
 
 export const action: ActionFunction = async ({ request, params }) => {
 	const user = await requireUser(request);
@@ -46,9 +47,11 @@ export const action: ActionFunction = async ({ request, params }) => {
 		schema: registerSchema,
 	});
 
-	const tournamentId = tournamentIdFromParams(params);
+	const { id: tournamentId } = parseParams({
+		params,
+		schema: idObject,
+	});
 	const tournament = await tournamentFromDB({ tournamentId, user });
-	const event = notFoundIfFalsy(findByIdentifier(tournamentId));
 
 	errorToastIfFalsy(
 		!tournament.hasStarted,
@@ -86,12 +89,17 @@ export const action: ActionFunction = async ({ request, params }) => {
 					team: {
 						id: ownTeam.id,
 						name: data.teamName,
-						prefersNotToHost: booleanToInt(data.prefersNotToHost),
-						noScreen: booleanToInt(data.noScreen),
+						prefersNotToHost: Number(data.prefersNotToHost),
+						noScreen: Number(data.noScreen),
 						teamId: data.teamId ?? null,
 					},
 				});
 			} else {
+				await requireNotBannedByOrganization({
+					tournament,
+					user,
+				});
+
 				errorToastIfFalsy(!tournament.isInvitational, "Event is invite only");
 				errorToastIfFalsy(
 					(await UserRepository.findLeanById(user.id))?.friendCode,
@@ -117,8 +125,8 @@ export const action: ActionFunction = async ({ request, params }) => {
 					}),
 					team: {
 						name: data.teamName,
-						noScreen: booleanToInt(data.noScreen),
-						prefersNotToHost: booleanToInt(data.prefersNotToHost),
+						noScreen: Number(data.noScreen),
+						prefersNotToHost: Number(data.prefersNotToHost),
 						teamId: data.teamId ?? null,
 					},
 					userId: user.id,
@@ -126,10 +134,11 @@ export const action: ActionFunction = async ({ request, params }) => {
 					avatarFileName,
 				});
 
-				ShowcaseTournaments.addToParticipationInfoMap({
+				ShowcaseTournaments.addToCached({
 					tournamentId,
 					type: "participant",
 					userId: user.id,
+					newTeamCount: tournament.ctx.teams.length + 1,
 				});
 			}
 			break;
@@ -157,7 +166,7 @@ export const action: ActionFunction = async ({ request, params }) => {
 
 			deleteTeamMember({ tournamentTeamId: ownTeam.id, userId: data.userId });
 
-			ShowcaseTournaments.removeFromParticipationInfoMap({
+			ShowcaseTournaments.removeFromCached({
 				tournamentId,
 				type: "participant",
 				userId: data.userId,
@@ -179,7 +188,7 @@ export const action: ActionFunction = async ({ request, params }) => {
 				userId: user.id,
 			});
 
-			ShowcaseTournaments.removeFromParticipationInfoMap({
+			ShowcaseTournaments.removeFromCached({
 				tournamentId,
 				type: "participant",
 				userId: user.id,
@@ -193,7 +202,10 @@ export const action: ActionFunction = async ({ request, params }) => {
 			errorToastIfFalsy(
 				validateCounterPickMapPool(
 					mapPool,
-					isOneModeTournamentOf(event),
+					isOneModeTournamentOf(
+						tournament.ctx.mapPickingStyle,
+						tournament.ctx.toSetMapPool,
+					),
 					tournament.ctx.tieBreakerMapPool,
 				) === "VALID",
 				"Invalid map pool",
@@ -248,10 +260,16 @@ export const action: ActionFunction = async ({ request, params }) => {
 				"No trust given from this user",
 			);
 			errorToastIfFalsy(
-				(await UserRepository.findLeanById(user.id))?.friendCode,
-				"No friend code",
+				(await UserRepository.findLeanById(data.userId))?.friendCode,
+				"User you are trying to add has no friend code set",
 			);
 			errorToastIfFalsy(tournament.registrationOpen, "Registration is closed");
+
+			await requireNotBannedByOrganization({
+				tournament,
+				user: { id: data.userId },
+				message: "The user is banned from events hosted by this organization",
+			});
 
 			joinTeam({
 				userId: data.userId,
@@ -267,26 +285,28 @@ export const action: ActionFunction = async ({ request, params }) => {
 				trustReceiverUserId: user.id,
 			});
 
-			ShowcaseTournaments.addToParticipationInfoMap({
+			ShowcaseTournaments.addToCached({
 				tournamentId,
 				type: "participant",
 				userId: data.userId,
 			});
 
-			notify({
-				userIds: [data.userId],
-				notification: {
-					type: "TO_ADDED_TO_TEAM",
-					meta: {
-						adderUsername: user.username,
-						tournamentId,
-						teamName: ownTeam.name,
-						tournamentName: tournament.ctx.name,
-						tournamentTeamId: ownTeam.id,
+			if (!tournament.isTest) {
+				notify({
+					userIds: [data.userId],
+					notification: {
+						type: "TO_ADDED_TO_TEAM",
+						meta: {
+							adderUsername: user.username,
+							tournamentId,
+							teamName: ownTeam.name,
+							tournamentName: tournament.ctx.name,
+							tournamentTeamId: ownTeam.id,
+						},
+						pictureUrl: tournament.ctx.logoSrc,
 					},
-					pictureUrl: tournament.logoSrc,
-				},
-			});
+				});
+			}
 
 			break;
 		}
@@ -303,7 +323,18 @@ export const action: ActionFunction = async ({ request, params }) => {
 
 			deleteTeam(ownTeam.id);
 
-			ShowcaseTournaments.clearParticipationInfoMap();
+			for (const member of ownTeam.members) {
+				ShowcaseTournaments.removeFromCached({
+					tournamentId,
+					type: "participant",
+					userId: member.userId,
+				});
+
+				ShowcaseTournaments.updateCachedTournamentTeamCount({
+					tournamentId,
+					newTeamCount: tournament.ctx.teams.length - 1,
+				});
+			}
 
 			break;
 		}

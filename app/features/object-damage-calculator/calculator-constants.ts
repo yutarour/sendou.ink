@@ -1,5 +1,4 @@
-import { type MainWeaponId, mainWeaponIds } from "~/modules/in-game-lists";
-import invariant from "~/utils/invariant";
+import type { MainWeaponId } from "~/modules/in-game-lists/types";
 import type { AnyWeapon, DamageType } from "../build-analyzer";
 import type { CombineWith } from "./calculator-types";
 import type objectDamages from "./core/object-dmg.json";
@@ -11,7 +10,7 @@ export const DAMAGE_RECEIVERS = [
 	"GreatBarrier_Barrier", // Big Bubbler Shield
 	"GreatBarrier_WeakPoint", // Big Bubbler Weak Point
 	"BlowerInhale", // Ink Vac Inhale
-	"Firework", // Super Chump
+	"Decoy", // Super Chump
 	"BulletPogo", // Triple Splashdown
 	"Gachihoko_Barrier", // Rainmaker Shield
 	"Wsb_Flag", // Squid Beakon
@@ -20,8 +19,11 @@ export const DAMAGE_RECEIVERS = [
 	"Bomb_TorpedoBullet", // Torpedo
 	"BulletUmbrellaCanopyCompact", // Undercover Brella Canopy
 	"BulletUmbrellaCanopyNormal", // Splat Brella Canopy
+	"BulletUmbrellaCanopyNormal_Launched", // Splat Brella Canopy launched
 	"BulletUmbrellaCanopyWide", // Tenta Brella Canopy
+	"BulletUmbrellaCanopyWide_Launched", // Tenta Brella Canopy launched
 	"BulletShelterCanopyFocus", // Recycled Brella Canopy
+	"BulletShelterCanopyFocus_Launched", // Recycled Brella Canopy launched
 ] as const;
 
 export const damagePriorities: Array<
@@ -124,32 +126,10 @@ export const damageTypesToCombine: Partial<
 	3040: [{ when: "DIRECT", combineWith: "DISTANCE" }],
 	// Tri-Stringer
 	7010: [{ when: "NORMAL_MAX", combineWith: "DISTANCE" }],
-	// Inkline Tri-Stringer
-	7011: [{ when: "NORMAL_MAX", combineWith: "DISTANCE" }],
 	// Wellstring V
 	7030: [{ when: "NORMAL_MAX", combineWith: "DISTANCE" }],
-	// Custom Wellstring V
-	7031: [{ when: "NORMAL_MAX", combineWith: "DISTANCE" }],
 	// Splatana Stamper
 	8000: [
-		{ when: "SPLATANA_VERTICAL_DIRECT", combineWith: "SPLATANA_VERTICAL" },
-		{
-			when: "SPLATANA_HORIZONTAL_DIRECT",
-			combineWith: "SPLATANA_HORIZONTAL",
-			multiplierOnly: true,
-		},
-	],
-	// Splatana Stamper Nouveau
-	8001: [
-		{ when: "SPLATANA_VERTICAL_DIRECT", combineWith: "SPLATANA_VERTICAL" },
-		{
-			when: "SPLATANA_HORIZONTAL_DIRECT",
-			combineWith: "SPLATANA_HORIZONTAL",
-			multiplierOnly: true,
-		},
-	],
-	// Order Splatana Replica
-	8005: [
 		{ when: "SPLATANA_VERTICAL_DIRECT", combineWith: "SPLATANA_VERTICAL" },
 		{
 			when: "SPLATANA_HORIZONTAL_DIRECT",
@@ -166,15 +146,6 @@ export const damageTypesToCombine: Partial<
 			multiplierOnly: true,
 		},
 	],
-	// Splatana Wiper Deco
-	8011: [
-		{ when: "SPLATANA_VERTICAL_DIRECT", combineWith: "SPLATANA_VERTICAL" },
-		{
-			when: "SPLATANA_HORIZONTAL_DIRECT",
-			combineWith: "SPLATANA_HORIZONTAL",
-			multiplierOnly: true,
-		},
-	],
 	// Mint Decavitator
 	8020: [
 		{ when: "SPLATANA_VERTICAL_DIRECT", combineWith: "SPLATANA_VERTICAL" },
@@ -184,22 +155,4 @@ export const damageTypesToCombine: Partial<
 			multiplierOnly: true,
 		},
 	],
-	// Charcoal Decavitator
-	8021: [
-		{ when: "SPLATANA_VERTICAL_DIRECT", combineWith: "SPLATANA_VERTICAL" },
-		{
-			when: "SPLATANA_HORIZONTAL_DIRECT",
-			combineWith: "SPLATANA_HORIZONTAL",
-			multiplierOnly: true,
-		},
-	],
 };
-invariant(
-	mainWeaponIds.every((id) => {
-		// not Splatana
-		if (id < 8000 || id >= 9000) return true;
-
-		return Boolean(damageTypesToCombine[id]);
-	}),
-	"Splatana weapon missing from damageTypesToCombine",
-);

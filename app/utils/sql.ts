@@ -2,8 +2,11 @@ export function errorIsSqliteUniqueConstraintFailure(error: any) {
 	return error?.code === "SQLITE_CONSTRAINT_UNIQUE";
 }
 
-export function errorIsSqliteForeignKeyConstraintFailure(error: Error) {
-	return error?.message?.includes("FOREIGN KEY constraint failed");
+export function errorIsSqliteForeignKeyConstraintFailure(error: unknown) {
+	return (
+		error instanceof Error &&
+		error?.message?.includes("FOREIGN KEY constraint failed")
+	);
 }
 
 export function parseDBJsonArray(value: any) {
@@ -25,8 +28,4 @@ export function parseDBArray(value: any) {
 	}
 
 	return parsed;
-}
-
-export function booleanToInt(value: boolean) {
-	return value ? 1 : 0;
 }

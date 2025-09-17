@@ -1,9 +1,11 @@
 import { assertUnreachable } from "~/utils/types";
 import {
-	PLUS_VOTING_PAGE,
-	SENDOUQ_PAGE,
 	badgePage,
+	PLUS_VOTING_PAGE,
 	plusSuggestionPage,
+	SENDOUQ_PAGE,
+	scrimPage,
+	scrimsPage,
 	sendouQMatchPage,
 	tournamentBracketsPage,
 	tournamentRegisterPage,
@@ -29,7 +31,12 @@ export const notificationNavIcon = (type: Notification["type"]) => {
 		case "TO_ADDED_TO_TEAM":
 		case "TO_BRACKET_STARTED":
 		case "TO_CHECK_IN_OPENED":
+		case "TO_TEST_CREATED":
 			return "medal";
+		case "SCRIM_NEW_REQUEST":
+		case "SCRIM_SCHEDULED":
+		case "SCRIM_CANCELED":
+			return "scrims";
 		default:
 			assertUnreachable(type);
 	}
@@ -66,9 +73,42 @@ export const notificationLink = (notification: Notification) => {
 				tournamentId: notification.meta.tournamentId,
 				bracketIdx: notification.meta.bracketIdx,
 			});
+		case "TO_TEST_CREATED":
 		case "TO_CHECK_IN_OPENED":
 			return tournamentRegisterPage(notification.meta.tournamentId);
+		case "SCRIM_NEW_REQUEST": {
+			return scrimsPage();
+		}
+		case "SCRIM_CANCELED":
+		case "SCRIM_SCHEDULED": {
+			return scrimPage(notification.meta.id);
+		}
 		default:
 			assertUnreachable(notification);
 	}
+};
+
+/** Takes the `meta` object of a notification and transforms it (if needed) to show the translated string to user */
+export const mapMetaForTranslation = (
+	notification: Notification,
+	language: string,
+) => {
+	if (
+		notification.type === "SCRIM_SCHEDULED" ||
+		notification.type === "SCRIM_CANCELED"
+	) {
+		return {
+			...notification.meta,
+			timeString: notification.meta.at // TODO: after two weeks this check can be removed (all notifications will have `at`)
+				? new Date(notification.meta.at).toLocaleString(language, {
+						day: "numeric",
+						month: "numeric",
+						hour: "numeric",
+						minute: "numeric",
+					})
+				: undefined,
+		};
+	}
+
+	return notification.meta;
 };

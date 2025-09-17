@@ -1,17 +1,19 @@
 import type { Tables, TournamentRoundMaps } from "~/db/tables";
 import { MapPool } from "~/features/map-list-generator/core/map-pool";
-import { modesIncluded } from "~/features/tournament";
+import { mapPickingStyleToModes } from "~/features/tournament/tournament-utils";
+import type * as PickBan from "~/features/tournament-bracket/core/PickBan";
 import type { Round } from "~/modules/brackets-model";
-import type { ModeShort, StageId } from "~/modules/in-game-lists";
+import type { ModeShort, StageId } from "~/modules/in-game-lists/types";
 import type { TournamentMapListMap } from "~/modules/tournament-map-list-generator";
 import {
-	type TournamentMaplistSource,
 	createTournamentMapList,
+	type TournamentMaplistSource,
 } from "~/modules/tournament-map-list-generator";
 import { starterMap } from "~/modules/tournament-map-list-generator/starter-map";
 import { syncCached } from "~/utils/cache.server";
 import invariant from "~/utils/invariant";
 import { logger } from "~/utils/logger";
+import { assertUnreachable } from "~/utils/types";
 import { findMapPoolByTeamId } from "../queries/findMapPoolByTeamId.server";
 import { findTieBreakerMapPoolByTournamentId } from "../queries/findTieBreakerMapPoolByTournamentId.server";
 import type { Bracket } from "./Bracket";
@@ -19,11 +21,9 @@ import type { Bracket } from "./Bracket";
 interface ResolveCurrentMapListArgs {
 	tournamentId: number;
 	mapPickingStyle: Tables["Tournament"]["mapPickingStyle"];
-	/** @deprecated use maps.count instead */
-	bestOf: 3 | 5 | 7;
 	matchId: number;
 	teams: [teamOneId: number, teamTwoId: number];
-	maps: TournamentRoundMaps | null;
+	maps: TournamentRoundMaps;
 	pickBanEvents: Array<{
 		mode: ModeShort;
 		stageId: StageId;
@@ -105,15 +105,21 @@ export function resolveFreshTeamPickedMapList(
 			? findTieBreakerMapPoolByTournamentId(args.tournamentId)
 			: [];
 
-	const count = () => {
-		if (!args.maps?.count) return args.bestOf;
-
-		if (args.maps.pickBan === "BAN_2") {
-			return args.maps.count + 2;
+	const pickBanCount = (pickBan: PickBan.Type, count: number) => {
+		switch (pickBan) {
+			case "BAN_2":
+				return count + 2;
+			case "COUNTERPICK":
+			case "COUNTERPICK_MODE_REPEAT_OK":
+				return 1;
+			default:
+				assertUnreachable(pickBan);
 		}
+	};
 
-		if (args.maps.pickBan === "COUNTERPICK") {
-			return 1;
+	const count = () => {
+		if (args.maps.pickBan) {
+			return pickBanCount(args.maps.pickBan, args.maps.count);
 		}
 
 		return args.maps.count;
@@ -122,7 +128,7 @@ export function resolveFreshTeamPickedMapList(
 	if (count() === 1) {
 		return starterMap({
 			seed: String(args.matchId),
-			modesIncluded: modesIncluded({ mapPickingStyle: args.mapPickingStyle }),
+			modesIncluded: mapPickingStyleToModes(args.mapPickingStyle),
 			tiebreakerMaps: new MapPool(tieBreakerMapPool),
 			teams: [
 				{
@@ -141,7 +147,7 @@ export function resolveFreshTeamPickedMapList(
 		return createTournamentMapList({
 			count: count(),
 			seed: String(args.matchId),
-			modesIncluded: modesIncluded({ mapPickingStyle: args.mapPickingStyle }),
+			modesIncluded: mapPickingStyleToModes(args.mapPickingStyle),
 			tiebreakerMaps: new MapPool(tieBreakerMapPool),
 			teams: [
 				{
@@ -155,15 +161,12 @@ export function resolveFreshTeamPickedMapList(
 			],
 		});
 	} catch (e) {
-		console.error(
-			"Failed to create map list. Falling back to default maps.",
-			e,
-		);
+		logger.error("Failed to create map list. Falling back to default maps.", e);
 
 		return createTournamentMapList({
 			count: count(),
 			seed: String(args.matchId),
-			modesIncluded: modesIncluded({ mapPickingStyle: args.mapPickingStyle }),
+			modesIncluded: mapPickingStyleToModes(args.mapPickingStyle),
 			tiebreakerMaps: new MapPool(tieBreakerMapPool),
 			teams: [
 				{

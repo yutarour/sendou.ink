@@ -1,18 +1,11 @@
-import type {
-	ActionFunction,
-	LoaderFunctionArgs,
-	MetaFunction,
-	SerializeFrom,
-} from "@remix-run/node";
-import { redirect } from "@remix-run/node";
+import type { MetaFunction, SerializeFrom } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { Link } from "@remix-run/react/dist/components";
 import clsx from "clsx";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { z } from "zod";
 import { Avatar } from "~/components/Avatar";
-import { Button, LinkButton } from "~/components/Button";
+import { LinkButton, SendouButton } from "~/components/elements/Button";
 import { FormWithConfirm } from "~/components/FormWithConfirm";
 import { Image } from "~/components/Image";
 import { Main } from "~/components/Main";
@@ -21,82 +14,32 @@ import { Placement } from "~/components/Placement";
 import { Section } from "~/components/Section";
 import { Table } from "~/components/Table";
 import { useUser } from "~/features/auth/core/user";
-import { requireUserId } from "~/features/auth/core/user.server";
-import * as CalendarRepository from "~/features/calendar/CalendarRepository.server";
-import * as ShowcaseTournaments from "~/features/front-page/core/ShowcaseTournaments.server";
 import { MapPool } from "~/features/map-list-generator/core/map-pool";
-import {
-	clearTournamentDataCache,
-	tournamentManagerData,
-} from "~/features/tournament-bracket/core/Tournament.server";
 import { useIsMounted } from "~/hooks/useIsMounted";
-import {
-	canDeleteCalendarEvent,
-	canEditCalendarEvent,
-	canReportCalendarEventWinners,
-} from "~/permissions";
 import { databaseTimestampToDate } from "~/utils/dates";
-import {
-	type SendouRouteHandle,
-	errorToastIfFalsy,
-	notFoundIfFalsy,
-} from "~/utils/remix.server";
+import type { SendouRouteHandle } from "~/utils/remix.server";
 import {
 	CALENDAR_PAGE,
 	calendarEditPage,
 	calendarEventPage,
 	calendarReportWinnersPage,
+	mapsPageWithMapPool,
 	navIconUrl,
-	readonlyMapsPage,
 	resolveBaseUrl,
-	tournamentPage,
 	userPage,
 } from "~/utils/urls";
-import { actualNumber, id } from "~/utils/zod";
 import { metaTags } from "../../../utils/remix";
+import { action } from "../actions/calendar.$id.server";
+import {
+	canDeleteCalendarEvent,
+	canEditCalendarEvent,
+	canReportCalendarEventWinners,
+} from "../calendar-utils";
 import { Tags } from "../components/Tags";
+import { loader } from "../loaders/calendar.$id.server";
+export { loader, action };
 
 import "~/styles/calendar-event.css";
-import "~/styles/maps.css";
-
-export const action: ActionFunction = async ({ params, request }) => {
-	const user = await requireUserId(request);
-	const parsedParams = z
-		.object({ id: z.preprocess(actualNumber, id) })
-		.parse(params);
-	const event = notFoundIfFalsy(
-		await CalendarRepository.findById({ id: parsedParams.id }),
-	);
-
-	if (event.tournamentId) {
-		errorToastIfFalsy(
-			tournamentManagerData(event.tournamentId).stage.length === 0,
-			"Tournament has already started",
-		);
-	} else {
-		errorToastIfFalsy(
-			canDeleteCalendarEvent({
-				user,
-				event,
-				startTime: databaseTimestampToDate(event.startTimes[0]),
-			}),
-			"Cannot delete event",
-		);
-	}
-
-	await CalendarRepository.deleteById({
-		eventId: event.eventId,
-		tournamentId: event.tournamentId,
-	});
-
-	if (event.tournamentId) {
-		clearTournamentDataCache(event.tournamentId);
-		ShowcaseTournaments.clearParticipationInfoMap();
-		ShowcaseTournaments.clearCachedTournaments();
-	}
-
-	throw redirect(CALENDAR_PAGE);
-};
 
 export const meta: MetaFunction = (args) => {
 	const data = args.data as SerializeFrom<typeof loader>;
@@ -132,28 +75,6 @@ export const handle: SendouRouteHandle = {
 			},
 		];
 	},
-};
-
-export const loader = async ({ params }: LoaderFunctionArgs) => {
-	const parsedParams = z
-		.object({ id: z.preprocess(actualNumber, id) })
-		.parse(params);
-	const event = notFoundIfFalsy(
-		await CalendarRepository.findById({
-			id: parsedParams.id,
-			includeBadgePrizes: true,
-			includeMapPool: true,
-		}),
-	);
-
-	if (event.tournamentId) {
-		throw redirect(tournamentPage(event.tournamentId));
-	}
-
-	return {
-		event,
-		results: await CalendarRepository.findResultsByEventId(parsedParams.id),
-	};
 };
 
 export default function CalendarEventPage() {
@@ -198,14 +119,14 @@ export default function CalendarEventPage() {
 				<div className="stack md">
 					<div className="stack xs">
 						<h2>{data.event.name}</h2>
-						<Tags tags={data.event.tags} badges={data.event.badgePrizes} />
+						<Tags tags={data.event.tags} />
 					</div>
 					<div className="stack horizontal sm flex-wrap">
 						{data.event.discordUrl ? (
 							<LinkButton
 								to={data.event.discordUrl}
 								variant="outlined"
-								size="tiny"
+								size="small"
 								isExternal
 							>
 								Discord
@@ -214,13 +135,16 @@ export default function CalendarEventPage() {
 						<LinkButton
 							to={data.event.bracketUrl}
 							variant="outlined"
-							size="tiny"
+							size="small"
 							isExternal
 						>
 							{resolveBaseUrl(data.event.bracketUrl)}
 						</LinkButton>
 						{canEditCalendarEvent({ user, event: data.event }) && (
-							<LinkButton size="tiny" to={calendarEditPage(data.event.eventId)}>
+							<LinkButton
+								size="small"
+								to={calendarEditPage(data.event.eventId)}
+							>
 								{t("common:actions.edit")}
 							</LinkButton>
 						)}
@@ -230,7 +154,7 @@ export default function CalendarEventPage() {
 							startTimes: data.event.startTimes,
 						}) && (
 							<LinkButton
-								size="tiny"
+								size="small"
 								to={calendarReportWinnersPage(data.event.eventId)}
 							>
 								{t("calendar:actions.reportWinners")}
@@ -253,14 +177,14 @@ export default function CalendarEventPage() {
 							name: data.event.name,
 						})}
 					>
-						<Button
+						<SendouButton
 							className="ml-auto"
-							size="tiny"
+							size="small"
 							variant="minimal-destructive"
 							type="submit"
 						>
 							{t("calendar:actions.delete")}
-						</Button>
+						</SendouButton>
 					</FormWithConfirm>
 				) : null}
 			</div>
@@ -345,15 +269,17 @@ function MapPoolInfo() {
 
 	if (!data.event.mapPool || data.event.mapPool.length === 0) return null;
 
+	const mapPool = new MapPool(data.event.mapPool);
+
 	return (
 		<Section title={t("calendar:forms.mapPool")}>
 			<div className="event__map-pool-section">
-				<MapPoolStages mapPool={new MapPool(data.event.mapPool)} />
+				<MapPoolStages mapPool={mapPool} />
 				<LinkButton
 					className="event__create-map-list-link"
-					to={readonlyMapsPage(data.event.eventId)}
+					to={mapsPageWithMapPool(mapPool)}
 					variant="outlined"
-					size="tiny"
+					size="small"
 				>
 					<Image alt="" path={navIconUrl("maps")} width={22} height={22} />
 					{t("calendar:createMapList")}

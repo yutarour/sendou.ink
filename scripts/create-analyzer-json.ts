@@ -8,12 +8,19 @@
 // 5) params (weapon folder) inside dicts
 
 import fs from "node:fs";
-import { z } from "zod";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { z } from "zod/v4";
 import type { MainWeaponParams, SubWeaponParams } from "~/modules/analyzer";
 import type { ParamsJson } from "~/modules/analyzer/types";
-import { SQUID_BEAKON_ID, type SpecialWeaponId } from "~/modules/in-game-lists";
-import { type SubWeaponId, subWeaponIds } from "~/modules/in-game-lists";
+import {
+	type SpecialWeaponId,
+	SQUID_BEAKON_ID,
+	type SubWeaponId,
+	subWeaponIds,
+} from "~/modules/in-game-lists/weapon-ids";
 import invariant from "~/utils/invariant";
+import { logger } from "~/utils/logger";
 import playersParams from "./dicts/SplPlayer.game__GameParameterTable.json";
 import weapons from "./dicts/WeaponInfoMain.json";
 import specialWeapons from "./dicts/WeaponInfoSpecial.json";
@@ -24,9 +31,6 @@ import {
 	translationJsonFolderName,
 } from "./utils";
 
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { logger } from "~/utils/logger";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -497,7 +501,9 @@ function parametersToSpecialWeaponResult(params: any) {
 	const isCrabTank = () => !!params.CannonParam;
 	const isKraken = () => !!params.BodyParam?.DamageJumpValue;
 	const isInkjet = () => !!params.JetParam;
+	const isScreen = () => !!params.WallParam;
 	const isInkStorm = () => !!params.CloudParam;
+	const isInkstrike = () => !!params.MotherParam;
 	const isBooyahBomb = () =>
 		params.BlastParam?.$type === "spl__BulletSpNiceBallBlastParam";
 
@@ -545,6 +551,12 @@ function parametersToSpecialWeaponResult(params: any) {
 		return 1200;
 	};
 
+	const ScreenDirectDamage = () => {
+		if (!isScreen()) return;
+
+		return 400;
+	};
+
 	const BooyahBombTickDamage = () => {
 		if (!isBooyahBomb()) return;
 
@@ -555,6 +567,12 @@ function parametersToSpecialWeaponResult(params: any) {
 		if (!isInkStorm()) return;
 
 		return 4;
+	};
+
+	const InkstrikeTickDamage = () => {
+		if (!isInkstrike()) return;
+
+		return 75;
 	};
 
 	return {
@@ -571,7 +589,8 @@ function parametersToSpecialWeaponResult(params: any) {
 			params.DamageParam?.DirectHitDamage ??
 			params.spl__BulletSpShockSonarParam?.GeneratorParam?.HitDamage ??
 			KrakenDirectDamage() ??
-			InkjetDirectDamage(),
+			InkjetDirectDamage() ??
+			ScreenDirectDamage(),
 		WaveDamage: params.spl__BulletSpShockSonarParam?.WaveParam?.Damage,
 		ExhaleBlastParamMinChargeDistanceDamage:
 			params.ExhaleBlastParamMinCharge?.DistanceDamage,
@@ -588,6 +607,7 @@ function parametersToSpecialWeaponResult(params: any) {
 		TickDamage:
 			BooyahBombTickDamage() ??
 			InkStormTickDamage() ??
+			InkstrikeTickDamage() ??
 			params.spl__BulletSpMicroLaserBitParam?.LaserParam?.LaserDamage,
 	};
 }
@@ -857,7 +877,7 @@ function writeTranslationsJsons(arr: TranslationArray) {
 						.map(({ key, value }) => [key, value]),
 				),
 				null,
-				2,
+				"\t",
 			)}\n`,
 		);
 	}

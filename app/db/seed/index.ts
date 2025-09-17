@@ -1,77 +1,77 @@
 import { faker } from "@faker-js/faker";
-import { sub } from "date-fns";
-import capitalize from "just-capitalize";
-import shuffle from "just-shuffle";
-import { nanoid } from "nanoid";
-import { ADMIN_DISCORD_ID, ADMIN_ID, INVITE_CODE_LENGTH } from "~/constants";
+import { add, sub } from "date-fns";
+import * as R from "remeda";
 import { db, sql } from "~/db/sql";
+import { ADMIN_DISCORD_ID, ADMIN_ID } from "~/features/admin/admin-constants";
 import type { SeedVariation } from "~/features/api-private/routes/seed";
+import * as AssociationRepository from "~/features/associations/AssociationRepository.server";
 import * as BuildRepository from "~/features/builds/BuildRepository.server";
 import * as CalendarRepository from "~/features/calendar/CalendarRepository.server";
-import { persistedTags } from "~/features/calendar/calendar-constants";
+import { tags } from "~/features/calendar/calendar-constants";
 import * as LFGRepository from "~/features/lfg/LFGRepository.server";
 import { TIMEZONES } from "~/features/lfg/lfg-constants";
 import { MapPool } from "~/features/map-list-generator/core/map-pool";
 import * as NotificationRepository from "~/features/notifications/NotificationRepository.server";
 import type { Notification } from "~/features/notifications/notifications-types";
 import * as PlusSuggestionRepository from "~/features/plus-suggestions/PlusSuggestionRepository.server";
-import * as PlusVotingRepository from "~/features/plus-voting/PlusVotingRepository.server";
 import {
 	lastCompletedVoting,
 	nextNonCompletedVoting,
 	rangeToMonthYear,
 } from "~/features/plus-voting/core";
-import * as QMatchRepository from "~/features/sendouq-match/QMatchRepository.server";
-import * as QSettingsRepository from "~/features/sendouq-settings/QSettingsRepository.server";
-import { BANNED_MAPS } from "~/features/sendouq-settings/banned-maps";
-import { AMOUNT_OF_MAPS_IN_POOL_PER_MODE } from "~/features/sendouq-settings/q-settings-constants";
+import * as PlusVotingRepository from "~/features/plus-voting/PlusVotingRepository.server";
+import * as ScrimPostRepository from "~/features/scrims/ScrimPostRepository.server";
 import * as QRepository from "~/features/sendouq/QRepository.server";
-import { calculateMatchSkills } from "~/features/sendouq/core/skills.server";
+import { addMember } from "~/features/sendouq/queries/addMember.server";
+import { createMatch } from "~/features/sendouq/queries/createMatch.server";
+import { calculateMatchSkills } from "~/features/sendouq-match/core/skills.server";
 import {
 	summarizeMaps,
 	summarizePlayerResults,
-} from "~/features/sendouq/core/summarizer.server";
-import { winnersArrayToWinner } from "~/features/sendouq/q-utils";
-import { addMapResults } from "~/features/sendouq/queries/addMapResults.server";
-import { addMember } from "~/features/sendouq/queries/addMember.server";
-import { addPlayerResults } from "~/features/sendouq/queries/addPlayerResults.server";
-import { addReportedWeapons } from "~/features/sendouq/queries/addReportedWeapons.server";
-import { addSkills } from "~/features/sendouq/queries/addSkills.server";
-import { createMatch } from "~/features/sendouq/queries/createMatch.server";
-import { findMatchById } from "~/features/sendouq/queries/findMatchById.server";
-import { reportScore } from "~/features/sendouq/queries/reportScore.server";
-import { setGroupAsInactive } from "~/features/sendouq/queries/setGroupAsInactive.server";
-import { clearAllTournamentDataCache } from "~/features/tournament-bracket/core/Tournament.server";
+} from "~/features/sendouq-match/core/summarizer.server";
+import * as QMatchRepository from "~/features/sendouq-match/QMatchRepository.server";
+import { winnersArrayToWinner } from "~/features/sendouq-match/q-match-utils";
+import { addMapResults } from "~/features/sendouq-match/queries/addMapResults.server";
+import { addPlayerResults } from "~/features/sendouq-match/queries/addPlayerResults.server";
+import { addReportedWeapons } from "~/features/sendouq-match/queries/addReportedWeapons.server";
+import { addSkills } from "~/features/sendouq-match/queries/addSkills.server";
+import { findMatchById } from "~/features/sendouq-match/queries/findMatchById.server";
+import { reportScore } from "~/features/sendouq-match/queries/reportScore.server";
+import { setGroupAsInactive } from "~/features/sendouq-match/queries/setGroupAsInactive.server";
+import { BANNED_MAPS } from "~/features/sendouq-settings/banned-maps";
+import * as QSettingsRepository from "~/features/sendouq-settings/QSettingsRepository.server";
+import { AMOUNT_OF_MAPS_IN_POOL_PER_MODE } from "~/features/sendouq-settings/q-settings-constants";
 import { TOURNAMENT } from "~/features/tournament/tournament-constants";
+import { clearAllTournamentDataCache } from "~/features/tournament-bracket/core/Tournament.server";
+import * as TournamentOrganizationRepository from "~/features/tournament-organization/TournamentOrganizationRepository.server";
 import * as UserRepository from "~/features/user-page/UserRepository.server";
 import { createVod } from "~/features/vods/queries/createVod.server";
 import {
 	secondsToHoursMinutesSecondString,
 	youtubeIdToYoutubeUrl,
 } from "~/features/vods/vods-utils";
+import { abilities } from "~/modules/in-game-lists/abilities";
+import {
+	clothesGearIds,
+	headGearIds,
+	shoesGearIds,
+} from "~/modules/in-game-lists/gear-ids";
+import { modesShort, rankedModesShort } from "~/modules/in-game-lists/modes";
+import { stageIds } from "~/modules/in-game-lists/stage-ids";
 import type {
 	AbilityType,
 	MainWeaponId,
 	StageId,
-} from "~/modules/in-game-lists";
-import {
-	abilities,
-	clothesGearIds,
-	headGearIds,
-	mainWeaponIds,
-	modesShort,
-	shoesGearIds,
-	stageIds,
-} from "~/modules/in-game-lists";
-import { rankedModesShort } from "~/modules/in-game-lists/modes";
+} from "~/modules/in-game-lists/types";
+import { mainWeaponIds } from "~/modules/in-game-lists/weapon-ids";
 import type { TournamentMapListMap } from "~/modules/tournament-map-list-generator";
 import { SENDOUQ_DEFAULT_MAPS } from "~/modules/tournament-map-list-generator/constants";
-import { nullFilledArray, pickRandomItem } from "~/utils/arrays";
-import { dateToDatabaseTimestamp } from "~/utils/dates";
+import { nullFilledArray } from "~/utils/arrays";
+import { databaseTimestampNow, dateToDatabaseTimestamp } from "~/utils/dates";
+import { shortNanoid } from "~/utils/id";
 import invariant from "~/utils/invariant";
 import { mySlugify } from "~/utils/urls";
-import type { Tables, UserMapModePreferences } from "../tables";
-import type { Art, UserSubmittedImage } from "../types";
+import type { QWeaponPool, Tables, UserMapModePreferences } from "../tables";
 import {
 	ADMIN_TEST_AVATAR,
 	AMOUNT_OF_CALENDAR_EVENTS,
@@ -124,10 +124,10 @@ const basicSeeds = (variation?: SeedVariation | null) => [
 	syncPlusTiers,
 	lastMonthSuggestions,
 	thisMonthsSuggestions,
-	badgesToAdmin,
 	badgesToUsers,
 	badgeManagers,
 	patrons,
+	organization,
 	calendarEvents,
 	calendarEventBadges,
 	calendarEventResults,
@@ -165,24 +165,25 @@ const basicSeeds = (variation?: SeedVariation | null) => [
 	realVideo,
 	realVideoCast,
 	xRankPlacements,
-	userFavBadges,
 	arts,
 	commissionsOpen,
 	playedMatches,
 	groups,
 	friendCodes,
 	lfgPosts,
+	scrimPosts,
+	scrimPostRequests,
+	associations,
 	notifications,
 ];
 
 export async function seed(variation?: SeedVariation | null) {
 	wipeDB();
 
-	let count = 0;
 	for (const seedFunc of basicSeeds(variation)) {
 		if (!seedFunc) continue;
 
-		count++;
+		faker.seed(5800);
 
 		await seedFunc();
 	}
@@ -192,6 +193,9 @@ export async function seed(variation?: SeedVariation | null) {
 
 function wipeDB() {
 	const tablesToDelete = [
+		"ScrimPost",
+		"TournamentOrganizationBannedUser",
+		"Association",
 		"LFGPost",
 		"Skill",
 		"ReportedWeapon",
@@ -230,6 +234,7 @@ function wipeDB() {
 		"PlusVote",
 		"TournamentBadgeOwner",
 		"BadgeManager",
+		"TournamentOrganization",
 	];
 
 	for (const table of tablesToDelete) {
@@ -346,7 +351,7 @@ async function userProfiles() {
 
 	for (let id = 2; id < 500; id++) {
 		if (id === ADMIN_ID || id === NZAP_TEST_ID) continue;
-		if (Math.random() < 0.25) continue; // 75% have bio
+		if (faker.number.float(1) < 0.25) continue; // 75% have bio
 
 		sql
 			.prepare(
@@ -358,15 +363,16 @@ async function userProfiles() {
 					faker.helpers.arrayElement([1, 1, 1, 2, 3, 4]),
 					"\n\n",
 				),
-				country: Math.random() > 0.5 ? faker.location.countryCode() : null,
+				country:
+					faker.number.float(1) > 0.5 ? faker.location.countryCode() : null,
 			});
 	}
 
 	for (let id = 2; id < 500; id++) {
 		if (id === ADMIN_ID || id === NZAP_TEST_ID) continue;
-		if (Math.random() < 0.15) continue; // 85% have weapons
+		if (faker.number.float(1) < 0.15) continue; // 85% have weapons
 
-		const weapons = shuffle([...mainWeaponIds]);
+		const weapons = faker.helpers.shuffle(mainWeaponIds);
 
 		for (let j = 0; j < faker.helpers.arrayElement([1, 2, 3, 4, 5]); j++) {
 			sql
@@ -387,24 +393,24 @@ async function userProfiles() {
 					userId: id,
 					weaponSplId: weapons.pop()!,
 					order: j + 1,
-					isFavorite: Math.random() > 0.8 ? 1 : 0,
+					isFavorite: faker.number.float(1) > 0.8 ? 1 : 0,
 				});
 		}
 	}
 
 	for (let id = 1; id < 500; id++) {
-		const defaultLanguages = Math.random() > 0.1 ? ["en"] : [];
-		if (Math.random() > 0.9) defaultLanguages.push("es");
-		if (Math.random() > 0.9) defaultLanguages.push("fr");
-		if (Math.random() > 0.9) defaultLanguages.push("de");
-		if (Math.random() > 0.9) defaultLanguages.push("it");
-		if (Math.random() > 0.9) defaultLanguages.push("ja");
+		const defaultLanguages = faker.number.float(1) > 0.1 ? ["en"] : [];
+		if (faker.number.float(1) > 0.9) defaultLanguages.push("es");
+		if (faker.number.float(1) > 0.9) defaultLanguages.push("fr");
+		if (faker.number.float(1) > 0.9) defaultLanguages.push("de");
+		if (faker.number.float(1) > 0.9) defaultLanguages.push("it");
+		if (faker.number.float(1) > 0.9) defaultLanguages.push("ja");
 
 		await QSettingsRepository.updateVoiceChat({
 			languages: defaultLanguages,
 			userId: id,
 			vc:
-				Math.random() > 0.2
+				faker.number.float(1) > 0.2
 					? "YES"
 					: faker.helpers.arrayElement(["YES", "NO", "LISTEN_ONLY"]),
 		});
@@ -413,13 +419,13 @@ async function userProfiles() {
 
 const randomPreferences = (): UserMapModePreferences => {
 	const modes: UserMapModePreferences["modes"] = modesShort.flatMap((mode) => {
-		if (Math.random() > 0.5 && mode !== "SZ") return [];
+		if (faker.number.float(1) > 0.5 && mode !== "SZ") return [];
 
 		const criteria = mode === "SZ" ? 0.2 : 0.5;
 
 		return {
 			mode,
-			preference: Math.random() > criteria ? "PREFER" : "AVOID",
+			preference: faker.number.float(1) > criteria ? "PREFER" : "AVOID",
 		};
 	});
 
@@ -431,7 +437,8 @@ const randomPreferences = (): UserMapModePreferences => {
 
 			return {
 				mode,
-				stages: shuffle([...stageIds])
+				stages: faker.helpers
+					.shuffle(stageIds)
 					.filter((stageId) => !BANNED_MAPS[mode].includes(stageId))
 					.slice(0, AMOUNT_OF_MAPS_IN_POOL_PER_MODE),
 			};
@@ -441,7 +448,7 @@ const randomPreferences = (): UserMapModePreferences => {
 
 async function userMapModePreferences() {
 	for (let id = 1; id < 500; id++) {
-		if (id !== ADMIN_ID && Math.random() < 0.2) continue; // 80% have maps && admin always
+		if (id !== ADMIN_ID && faker.number.float(1) < 0.2) continue; // 80% have maps && admin always
 
 		await db
 			.updateTable("User")
@@ -456,16 +463,20 @@ async function userMapModePreferences() {
 async function userQWeaponPool() {
 	for (let id = 1; id < 500; id++) {
 		if (id === 2) continue; // no weapons for N-ZAP
-		if (Math.random() < 0.2) continue; // 80% have weapons
+		if (faker.number.float(1) < 0.2) continue; // 80% have weapons
 
-		const weapons = shuffle([...mainWeaponIds]).slice(
-			0,
-			faker.helpers.arrayElement([1, 2, 3, 4]),
-		);
+		const weapons = faker.helpers
+			.shuffle(mainWeaponIds)
+			.slice(0, faker.helpers.arrayElement([1, 2, 3, 4]));
+
+		const weaponPool: Array<QWeaponPool> = weapons.map((weaponSplId) => ({
+			weaponSplId,
+			isFavorite: faker.number.float(1) > 0.7 ? 1 : 0,
+		}));
 
 		await db
 			.updateTable("User")
-			.set({ qWeaponPool: JSON.stringify(weapons) })
+			.set({ qWeaponPool: JSON.stringify(weaponPool) })
 			.where("User.id", "=", id)
 			.execute();
 	}
@@ -510,7 +521,7 @@ async function lastMonthsVoting() {
 
 	const { month, year } = lastCompletedVoting(new Date());
 
-	const fiveMinutesAgo = new Date(new Date().getTime() - 5 * 60 * 1000);
+	const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
 	for (let i = 1; i < 151; i++) {
 		if (i === NZAP_TEST_ID) continue; // omit N-ZAP user for testing;
@@ -599,28 +610,8 @@ function syncPlusTiers() {
 		.run();
 }
 
-function badgesToAdmin() {
-	const availableBadgeIds = shuffle(
-		(sql.prepare(`select "id" from "Badge"`).all() as any[]).map((b) => b.id),
-	).slice(0, 8) as number[];
-
-	const badgesWithDuplicates = availableBadgeIds.flatMap((id) =>
-		new Array(faker.helpers.arrayElement([1, 1, 1, 2, 3, 4]))
-			.fill(null)
-			.map(() => id),
-	);
-
-	for (const id of badgesWithDuplicates) {
-		sql
-			.prepare(
-				`insert into "TournamentBadgeOwner" ("badgeId", "userId") values ($id, $userId)`,
-			)
-			.run({ id, userId: ADMIN_ID });
-	}
-}
-
 function getAvailableBadgeIds() {
-	return shuffle(
+	return faker.helpers.shuffle(
 		(sql.prepare(`select "id" from "Badge"`).all() as any[]).map((b) => b.id),
 	);
 }
@@ -630,12 +621,18 @@ function badgesToUsers() {
 
 	let userIds = (
 		sql
-			.prepare(`select "id" from "User" where id != 2`) // no badges for N-ZAP
+			.prepare(
+				`select "id" from "User" where id != ${NZAP_TEST_ID} and id != ${ADMIN_ID}`,
+			)
 			.all() as any[]
 	).map((u) => u.id) as number[];
 
+	const insertTournamentBadgeOwnerStm = sql.prepare(
+		`insert into "TournamentBadgeOwner" ("badgeId", "userId") values ($id, $userId)`,
+	);
+
 	for (const id of availableBadgeIds) {
-		userIds = shuffle(userIds);
+		userIds = faker.helpers.shuffle(userIds);
 		for (
 			let i = 0;
 			i <
@@ -645,20 +642,20 @@ function badgesToUsers() {
 			});
 			i++
 		) {
-			let userToGetABadge = userIds.shift()!;
-			if (userToGetABadge === NZAP_TEST_ID && id === 1) {
-				// e2e test assumes N-ZAP does not have badge id = 1
-				userToGetABadge = userIds.shift()!;
-			}
+			const userToGetABadge = userIds.shift()!;
 
-			sql
-				.prepare(
-					`insert into "TournamentBadgeOwner" ("badgeId", "userId") values ($id, $userId)`,
-				)
-				.run({ id, userId: userToGetABadge });
+			insertTournamentBadgeOwnerStm.run({ id, userId: userToGetABadge });
 
 			userIds.push(userToGetABadge);
 		}
+	}
+
+	for (const badgeId of nullFilledArray(20).map((_, i) => i + 1)) {
+		insertTournamentBadgeOwnerStm.run({ id: badgeId, userId: ADMIN_ID });
+	}
+
+	for (const badgeId of [5, 6, 7]) {
+		insertTournamentBadgeOwnerStm.run({ id: badgeId, userId: NZAP_TEST_ID });
 	}
 }
 
@@ -680,19 +677,24 @@ function patrons() {
 			.all() as any[]
 	)
 		.map((u) => u.id)
-		.filter((id) => id !== NZAP_TEST_ID);
+		.filter((id) => id !== NZAP_TEST_ID && id !== ADMIN_ID) as number[];
 
+	const givePatronStm = sql.prepare(
+		`update user set "patronTier" = $patronTier, "patronSince" = $patronSince where id = $id`,
+	);
 	for (const id of userIds) {
-		sql
-			.prepare(
-				`update user set "patronTier" = $patronTier, "patronSince" = $patronSince where id = $id`,
-			)
-			.run({
-				id,
-				patronSince: dateToDatabaseTimestamp(faker.date.past()),
-				patronTier: faker.helpers.arrayElement([1, 1, 2, 2, 2, 3, 3, 4]),
-			});
+		givePatronStm.run({
+			id,
+			patronSince: dateToDatabaseTimestamp(faker.date.past()),
+			patronTier: faker.helpers.arrayElement([1, 1, 2, 2, 2, 3, 3, 4]),
+		});
 	}
+
+	givePatronStm.run({
+		id: ADMIN_ID,
+		patronSince: dateToDatabaseTimestamp(faker.date.past()),
+		patronTier: 2,
+	});
 }
 
 function userIdsInRandomOrder(specialLast = false) {
@@ -721,7 +723,7 @@ function calendarEvents() {
 	const userIds = userIdsInRandomOrder();
 
 	for (let id = 1; id <= AMOUNT_OF_CALENDAR_EVENTS; id++) {
-		const shuffledTags = shuffle(Object.keys(persistedTags));
+		const shuffledTags = faker.helpers.shuffle(Object.keys(tags));
 
 		sql
 			.prepare(
@@ -747,7 +749,7 @@ function calendarEvents() {
 			)
 			.run({
 				id,
-				name: `${capitalize(faker.word.adjective())} ${capitalize(
+				name: `${R.capitalize(faker.word.adjective())} ${R.capitalize(
 					faker.word.noun(),
 				)}`,
 				description: faker.lorem.paragraph(),
@@ -755,7 +757,7 @@ function calendarEvents() {
 				bracketUrl: faker.internet.url(),
 				authorId: id === 1 ? NZAP_TEST_ID : (userIds.pop() ?? null),
 				tags:
-					Math.random() > 0.2
+					faker.number.float(1) > 0.2
 						? shuffledTags
 								.slice(
 									0,
@@ -767,7 +769,7 @@ function calendarEvents() {
 						: null,
 			});
 
-		const twoDayEvent = Math.random() > 0.9;
+		const twoDayEvent = faker.number.float(1) > 0.9;
 		const startTime =
 			id % 2 === 0
 				? faker.date.soon({ days: 42 })
@@ -814,9 +816,15 @@ function calendarEvents() {
 	}
 }
 
+const addCalendarEventBadgeStm = sql.prepare(
+	/*sql */ `insert into "CalendarEventBadge" 
+          ("eventId", "badgeId") 
+          values ($eventId, $badgeId)`,
+);
+
 function calendarEventBadges() {
 	for (let eventId = 1; eventId <= AMOUNT_OF_CALENDAR_EVENTS; eventId++) {
-		if (Math.random() > 0.25) continue;
+		if (faker.number.float(1) > 0.25) continue;
 
 		const availableBadgeIds = getAvailableBadgeIds();
 
@@ -825,13 +833,10 @@ function calendarEventBadges() {
 			i < faker.helpers.arrayElement([1, 1, 1, 1, 2, 2, 3]);
 			i++
 		) {
-			sql
-				.prepare(
-					`insert into "CalendarEventBadge" 
-          ("eventId", "badgeId") 
-          values ($eventId, $badgeId)`,
-				)
-				.run({ eventId, badgeId: availableBadgeIds.pop() });
+			addCalendarEventBadgeStm.run({
+				eventId,
+				badgeId: availableBadgeIds.pop(),
+			});
 		}
 	}
 }
@@ -853,7 +858,7 @@ async function calendarEventResults() {
 
 	for (const eventId of eventIdsOfPast) {
 		// event id = 1 needs to be without results for e2e tests
-		if (Math.random() < 0.3 || eventId === 1) continue;
+		if (faker.number.float(1) < 0.3 || eventId === 1) continue;
 
 		await CalendarRepository.upsertReportedScores({
 			eventId,
@@ -862,13 +867,13 @@ async function calendarEventResults() {
 				.fill(null)
 				.map((_, i) => ({
 					placement: i + 1,
-					teamName: capitalize(faker.word.noun()),
+					teamName: R.capitalize(faker.word.noun()),
 					players: new Array(
 						faker.helpers.arrayElement([1, 2, 3, 4, 4, 4, 4, 4, 5, 6]),
 					)
 						.fill(null)
 						.map(() => {
-							const withStringName = Math.random() < 0.2;
+							const withStringName = faker.number.float(1) < 0.2;
 
 							return {
 								name: withStringName ? faker.person.firstName() : null,
@@ -911,6 +916,14 @@ function calendarEventWithToTools(
 		DEPTHS: "The Depths 5",
 		LUTI: "Leagues Under The Ink Season 15",
 	}[event];
+	const badges = {
+		PICNIC: [1, 2],
+		ITZ: [3, 4],
+		PP: [5, 6],
+		SOS: [7, 8],
+		DEPTHS: [9, 10],
+		LUTI: [],
+	}[event];
 
 	const settings: Tables["Tournament"]["settings"] =
 		event === "DEPTHS"
@@ -924,6 +937,20 @@ function calendarEventWithToTools(
 								groupCount: 2,
 								roundCount: 4,
 							},
+						},
+						{
+							type: "single_elimination",
+							name: "Top Cut",
+							requiresCheckIn: false,
+							settings: {
+								thirdPlaceMatch: false,
+							},
+							sources: [
+								{
+									bracketIdx: 0,
+									placements: [1, 2, 3, 4],
+								},
+							],
 						},
 					],
 					enableNoScreenToggle: true,
@@ -1076,7 +1103,8 @@ function calendarEventWithToTools(
         "discordInviteCode",
         "bracketUrl",
         "authorId",
-        "tournamentId"
+        "tournamentId",
+				"organizationId"
       ) values (
         $id,
         $name,
@@ -1084,7 +1112,8 @@ function calendarEventWithToTools(
         $discordInviteCode,
         $bracketUrl,
         $authorId,
-        $tournamentId
+        $tournamentId,
+				$organizationId
       )
       `,
 		)
@@ -1096,6 +1125,7 @@ function calendarEventWithToTools(
 			bracketUrl: faker.internet.url(),
 			authorId: ADMIN_ID,
 			tournamentId,
+			organizationId: event === "PICNIC" ? 1 : null,
 		});
 
 	const halfAnHourFromNow = new Date(Date.now() + 1000 * 60 * 30);
@@ -1120,6 +1150,13 @@ function calendarEventWithToTools(
 					: new Date(Date.now() - 1000 * 60 * 60),
 			),
 		});
+
+	for (const badgeId of badges) {
+		addCalendarEventBadgeStm.run({
+			eventId,
+			badgeId,
+		});
+	}
 }
 
 const tiebreakerPicks = new MapPool([
@@ -1258,7 +1295,7 @@ function calendarEventWithToToolsTeams(
 				name,
 				createdAt: dateToDatabaseTimestamp(new Date()),
 				tournamentId,
-				inviteCode: nanoid(INVITE_CODE_LENGTH),
+				inviteCode: shortNanoid(),
 			});
 
 		// in PICNIC & PP Chimera is not checked in + in LUTI no check-ins at all
@@ -1320,9 +1357,9 @@ function calendarEventWithToToolsTeams(
 		if (
 			event !== "SOS" &&
 			event !== "LUTI" &&
-			(Math.random() < 0.8 || id === 1)
+			(faker.number.float(1) < 0.8 || id === 1)
 		) {
-			const shuffledPairs = shuffle(availablePairs.slice());
+			const shuffledPairs = faker.helpers.shuffle(availablePairs.slice());
 
 			let SZ = 0;
 			let TC = 0;
@@ -1405,13 +1442,13 @@ function tournamentSubs() {
 			.run({
 				userId: id,
 				tournamentId: 1,
-				canVc: Number(Math.random() > 0.5),
+				canVc: Number(faker.number.float(1) > 0.5),
 				bestWeapons: nullFilledArray(
 					faker.helpers.arrayElement([1, 1, 1, 2, 2, 3, 4, 5]),
 				)
 					.map(() => {
 						while (true) {
-							const weaponId = pickRandomItem(mainWeaponIds);
+							const weaponId = R.sample(mainWeaponIds, 1)[0]!;
 							if (!includedWeaponIds.includes(weaponId)) {
 								includedWeaponIds.push(weaponId);
 								return weaponId;
@@ -1420,14 +1457,14 @@ function tournamentSubs() {
 					})
 					.join(","),
 				okWeapons:
-					Math.random() > 0.5
+					faker.number.float(1) > 0.5
 						? null
 						: nullFilledArray(
 								faker.helpers.arrayElement([1, 1, 1, 2, 2, 3, 4, 5]),
 							)
 								.map(() => {
 									while (true) {
-										const weaponId = pickRandomItem(mainWeaponIds);
+										const weaponId = R.sample(mainWeaponIds, 1)[0]!;
 										if (!includedWeaponIds.includes(weaponId)) {
 											includedWeaponIds.push(weaponId);
 											return weaponId;
@@ -1435,7 +1472,7 @@ function tournamentSubs() {
 									}
 								})
 								.join(","),
-				message: Math.random() > 0.5 ? null : faker.lorem.paragraph(),
+				message: faker.number.float(1) > 0.5 ? null : faker.lorem.paragraph(),
 				visibility: id < 105 ? "+1" : id < 110 ? "+2" : id < 115 ? "+2" : "ALL",
 			});
 	}
@@ -1444,29 +1481,32 @@ function tournamentSubs() {
 }
 
 const randomAbility = (legalTypes: AbilityType[]) => {
-	const randomOrderAbilities = shuffle([...abilities]);
+	const randomOrderAbilities = faker.helpers.shuffle([...abilities]);
 
 	return randomOrderAbilities.find((a) => legalTypes.includes(a.type))!.name;
 };
 
-const adminWeaponPool = mainWeaponIds.filter(() => Math.random() > 0.8);
+const adminWeaponPool = mainWeaponIds.filter(() => faker.number.float(1) > 0.8);
 async function adminBuilds() {
 	for (let i = 0; i < 50; i++) {
-		const randomOrderHeadGear = shuffle(headGearIds.slice());
-		const randomOrderClothesGear = shuffle(clothesGearIds.slice());
-		const randomOrderShoesGear = shuffle(shoesGearIds.slice());
+		const randomOrderHeadGear = faker.helpers.shuffle(headGearIds.slice());
+		const randomOrderClothesGear = faker.helpers.shuffle(
+			clothesGearIds.slice(),
+		);
+		const randomOrderShoesGear = faker.helpers.shuffle(shoesGearIds.slice());
 		// filter out sshot to prevent test flaking
-		const randomOrderWeaponIds = shuffle(
+		const randomOrderWeaponIds = faker.helpers.shuffle(
 			adminWeaponPool.filter((id) => id !== 40).slice(),
 		);
 
 		await BuildRepository.create({
-			title: `${capitalize(faker.word.adjective())} ${capitalize(
+			title: `${R.capitalize(faker.word.adjective())} ${R.capitalize(
 				faker.word.noun(),
 			)}`,
 			ownerId: ADMIN_ID,
 			private: 0,
-			description: Math.random() < 0.75 ? faker.lorem.paragraph() : null,
+			description:
+				faker.number.float(1) < 0.75 ? faker.lorem.paragraph() : null,
 			headGearSplId: randomOrderHeadGear[0],
 			clothesGearSplId: randomOrderClothesGear[0],
 			shoesGearSplId: randomOrderShoesGear[0],
@@ -1476,8 +1516,8 @@ async function adminBuilds() {
 				.fill(null)
 				.map(() => randomOrderWeaponIds.pop()!),
 			modes:
-				Math.random() < 0.75
-					? modesShort.filter(() => Math.random() < 0.5)
+				faker.number.float(1) < 0.75
+					? modesShort.filter(() => faker.number.float(1) < 0.5)
 					: null,
 			abilities: [
 				[
@@ -1515,22 +1555,25 @@ async function manySplattershotBuilds() {
 	for (let i = 0; i < 499; i++) {
 		const SPLATTERSHOT_ID = 40;
 
-		const randomOrderHeadGear = shuffle(headGearIds.slice());
-		const randomOrderClothesGear = shuffle(clothesGearIds.slice());
-		const randomOrderShoesGear = shuffle(shoesGearIds.slice());
-		const randomOrderWeaponIds = shuffle(mainWeaponIds.slice()).filter(
-			(id) => id !== SPLATTERSHOT_ID,
+		const randomOrderHeadGear = faker.helpers.shuffle(headGearIds.slice());
+		const randomOrderClothesGear = faker.helpers.shuffle(
+			clothesGearIds.slice(),
 		);
+		const randomOrderShoesGear = faker.helpers.shuffle(shoesGearIds.slice());
+		const randomOrderWeaponIds = faker.helpers
+			.shuffle(mainWeaponIds.slice())
+			.filter((id) => id !== SPLATTERSHOT_ID);
 
 		const ownerId = users.pop()!;
 
 		await BuildRepository.create({
 			private: 0,
-			title: `${capitalize(faker.word.adjective())} ${capitalize(
+			title: `${R.capitalize(faker.word.adjective())} ${R.capitalize(
 				faker.word.noun(),
 			)}`,
 			ownerId,
-			description: Math.random() < 0.75 ? faker.lorem.paragraph() : null,
+			description:
+				faker.number.float(1) < 0.75 ? faker.lorem.paragraph() : null,
 			headGearSplId: randomOrderHeadGear[0],
 			clothesGearSplId: randomOrderClothesGear[0],
 			shoesGearSplId: randomOrderShoesGear[0],
@@ -1542,8 +1585,8 @@ async function manySplattershotBuilds() {
 					i === 0 ? SPLATTERSHOT_ID : randomOrderWeaponIds.pop()!,
 				),
 			modes:
-				Math.random() < 0.75
-					? modesShort.filter(() => Math.random() < 0.5)
+				faker.number.float(1) < 0.75
+					? modesShort.filter(() => faker.number.float(1) < 0.5)
 					: null,
 			abilities: [
 				[
@@ -1573,25 +1616,12 @@ const detailedTeam = (seedVariation?: SeedVariation | null) => () => {
 	sql
 		.prepare(
 			/* sql */ `
-    insert into "UnvalidatedUserSubmittedImage" ("validatedAt", "url", "submitterUserId")
-      values 
-        (1672587342, 'AiGSM5T-cxm6BFGT7N_lA-1673297699133.webp', ${ADMIN_ID}), 
-        (1672587342, 'jTbWd95klxU2MzGFIdi1c-1673297932788.webp', ${ADMIN_ID})
-  `,
-		)
-		.run();
-
-	sql
-		.prepare(
-			/* sql */ `
-      insert into "AllTeam" ("name", "customUrl", "inviteCode", "bio", "avatarImgId", "bannerImgId")
+      insert into "AllTeam" ("name", "customUrl", "inviteCode", "bio")
        values (
           'Alliance Rogue',
           'alliance-rogue',
-          '${nanoid(INVITE_CODE_LENGTH)}',
-          '${faker.lorem.paragraph()}',
-          1,
-          2
+          '${shortNanoid()}',
+          '${faker.lorem.paragraph()}'
        )
   `,
 		)
@@ -1643,7 +1673,7 @@ function otherTeams() {
 		const teamName =
 			i === 3
 				? "Team Olive"
-				: `${capitalize(faker.word.adjective())} ${capitalize(
+				: `${R.capitalize(faker.word.adjective())} ${R.capitalize(
 						faker.word.noun(),
 					)}`;
 		const teamCustomUrl = mySlugify(teamName);
@@ -1665,7 +1695,7 @@ function otherTeams() {
 				id: i,
 				name: teamName,
 				customUrl: teamCustomUrl,
-				inviteCode: nanoid(INVITE_CODE_LENGTH),
+				inviteCode: shortNanoid(),
 				bio: faker.lorem.paragraph(),
 			});
 
@@ -1844,24 +1874,6 @@ function xRankPlacements() {
 	})();
 }
 
-function userFavBadges() {
-	// randomly choose Sendou's favorite badge
-	const badgeList = shuffle(
-		(
-			sql
-				.prepare(
-					`select "badgeId" from "BadgeOwner" where "userId" = ${ADMIN_ID}`,
-				)
-				.all() as any[]
-		).map((row) => row.badgeId),
-	);
-	sql
-		.prepare(
-			`update "User" set "favoriteBadgeId" = $id where "id" = ${ADMIN_ID}`,
-		)
-		.run({ id: badgeList[0] });
-}
-
 const addArtStm = sql.prepare(/* sql */ `
   insert into "Art" (
     "imgId",
@@ -1950,12 +1962,13 @@ function arts() {
 						validatedAt: dateToDatabaseTimestamp(new Date()),
 						url: getUrl(),
 						submitterUserId: userId,
-					}) as UserSubmittedImage
+					}) as Tables["UserSubmittedImage"]
 				).id,
 				authorId: userId,
 				isShowcase: i === 0 ? 1 : 0,
-				description: Math.random() > 0.5 ? faker.lorem.paragraph() : null,
-			}) as Art;
+				description:
+					faker.number.float(1) > 0.5 ? faker.lorem.paragraph() : null,
+			}) as Tables["Art"];
 
 			if (i === 1) {
 				for (
@@ -1984,7 +1997,7 @@ function commissionsOpen() {
 	const allUsers = userIdsInRandomOrder();
 
 	for (const userId of allUsers) {
-		if (Math.random() > 0.5) {
+		if (faker.number.float(1) > 0.5) {
 			updateCommissionStm.run({
 				commissionsOpen: 1,
 				commissionText: faker.lorem.paragraph(),
@@ -2043,13 +2056,15 @@ const randomMapList = (
 ): TournamentMapListMap[] => {
 	const szOnly = faker.helpers.arrayElement([true, false]);
 
-	let modePattern = shuffle([...modesShort]).filter(() => Math.random() > 0.15);
+	let modePattern = faker.helpers
+		.shuffle([...modesShort])
+		.filter(() => faker.number.float(1) > 0.15);
 	if (modePattern.length === 0) {
-		modePattern = shuffle([...rankedModesShort]);
+		modePattern = faker.helpers.shuffle([...rankedModesShort]);
 	}
 
 	const mapList: TournamentMapListMap[] = [];
-	const stageIdsShuffled = shuffle([...stageIds]);
+	const stageIdsShuffled = faker.helpers.shuffle([...stageIds]);
 
 	for (let i = 0; i < 7; i++) {
 		const mode = modePattern.pop()!;
@@ -2072,7 +2087,7 @@ const AMOUNT_OF_USERS_WITH_SKILLS = 100;
 async function playedMatches() {
 	const _groupMembers = (() => {
 		return new Array(AMOUNT_OF_USERS_WITH_SKILLS).fill(null).map(() => {
-			const users = shuffle(
+			const users = faker.helpers.shuffle(
 				userIdsInAscendingOrderById().slice(0, AMOUNT_OF_USERS_WITH_SKILLS),
 			);
 
@@ -2083,14 +2098,14 @@ async function playedMatches() {
 		userIdsInAscendingOrderById()
 			.slice(0, AMOUNT_OF_USERS_WITH_SKILLS)
 			.map((id) => {
-				const weapons = shuffle([...mainWeaponIds]);
+				const weapons = faker.helpers.shuffle([...mainWeaponIds]);
 				return [id, weapons[0]];
 			}),
 	);
 
 	let matchDate = new Date(Date.UTC(2023, 9, 15, 0, 0, 0, 0));
 	for (let i = 0; i < MATCHES_COUNT; i++) {
-		const groupMembers = shuffle([..._groupMembers]);
+		const groupMembers = faker.helpers.shuffle([..._groupMembers]);
 		const groupAlphaMembers = groupMembers.pop()!;
 		invariant(groupAlphaMembers, "groupAlphaMembers not found");
 
@@ -2153,7 +2168,7 @@ async function playedMatches() {
 				id: match.id,
 			});
 
-		if (Math.random() > 0.95) {
+		if (faker.number.float(1) > 0.95) {
 			// increment date by 1 day
 			matchDate = new Date(matchDate.getTime() + 1000 * 60 * 60 * 24);
 		}
@@ -2197,14 +2212,16 @@ async function playedMatches() {
 			reportScore({
 				matchId: match.id,
 				reportedByUserId:
-					Math.random() > 0.5 ? groupAlphaMembers[0] : groupBravoMembers[0],
+					faker.number.float(1) > 0.5
+						? groupAlphaMembers[0]
+						: groupBravoMembers[0],
 				winners,
 			});
 			addSkills({
 				skills: newSkills,
 				differences,
 				groupMatchId: match.id,
-				oldMatchMemento: { users: {}, groups: {} },
+				oldMatchMemento: { users: {}, groups: {}, pools: [] },
 			});
 			setGroupAsInactive(groupAlpha);
 			setGroupAsInactive(groupBravo);
@@ -2215,7 +2232,7 @@ async function playedMatches() {
 		})();
 
 		// -> add weapons for 90% of matches
-		if (Math.random() > 0.9) continue;
+		if (faker.number.float(1) > 0.9) continue;
 		const users = [...groupAlphaMembers, ...groupBravoMembers];
 		const mapsWithUsers = users.flatMap((u) =>
 			finishedMatch.mapList.map((m) => ({ map: m, user: u })),
@@ -2224,13 +2241,13 @@ async function playedMatches() {
 		addReportedWeapons(
 			mapsWithUsers.map((mu) => {
 				const weapon = () => {
-					if (Math.random() < 0.9) return defaultWeapons[mu.user];
-					if (Math.random() > 0.5)
+					if (faker.number.float(1) < 0.9) return defaultWeapons[mu.user];
+					if (faker.number.float(1) > 0.5)
 						return (
 							mainWeaponIds.find((id) => id > defaultWeapons[mu.user]) ?? 0
 						);
 
-					const shuffled = shuffle([...mainWeaponIds]);
+					const shuffled = faker.helpers.shuffle([...mainWeaponIds]);
 
 					return shuffled[0];
 				};
@@ -2281,6 +2298,158 @@ async function lfgPosts() {
 		type: "TEAM_FOR_PLAYER",
 		teamId: 1,
 	});
+}
+
+async function scrimPosts() {
+	const allUsers = userIdsInRandomOrder(true);
+
+	// Only schedule admin's scrim at least 1 hour in the future, others can be 'now'
+	const date = (isAdmin = false) => {
+		if (isAdmin) {
+			const randomFuture = faker.date.between({
+				from: add(new Date(), { hours: 1 }),
+				to: add(new Date(), { days: 7 }),
+			});
+			randomFuture.setMinutes(0);
+			randomFuture.setSeconds(0);
+			randomFuture.setMilliseconds(0);
+			return dateToDatabaseTimestamp(randomFuture);
+		}
+		const isNow = faker.number.float(1) > 0.5;
+		if (isNow) {
+			return databaseTimestampNow();
+		}
+		const randomFuture = faker.date.between({
+			from: new Date(),
+			to: add(new Date(), { days: 7 }),
+		});
+		randomFuture.setMinutes(0);
+		randomFuture.setSeconds(0);
+		randomFuture.setMilliseconds(0);
+		return dateToDatabaseTimestamp(randomFuture);
+	};
+
+	const team = () => {
+		const hasTeam = faker.number.float(1) > 0.5;
+
+		if (!hasTeam) {
+			return null;
+		}
+
+		return faker.helpers.rangeToNumber({ min: 5, max: 49 });
+	};
+
+	const divRange = () => {
+		const hasDivRange = faker.number.float(1) > 0.2;
+
+		if (!hasDivRange) {
+			return null;
+		}
+
+		const maxDiv = faker.helpers.arrayElement([0, 1, 2, 3, 4, 5]);
+		const minDiv = faker.helpers.arrayElement([6, 7, 8, 9, 10, 11]);
+
+		return { maxDiv, minDiv };
+	};
+
+	const users = () => {
+		const count = faker.helpers.arrayElement([4, 4, 4, 4, 4, 4, 5, 5, 5, 6]);
+
+		const result: Array<{ userId: number; isOwner: number }> = [];
+		for (let i = 0; i < count; i++) {
+			const user = allUsers.shift()!;
+
+			result.push({
+				userId: user,
+				isOwner: Number(i === 0),
+			});
+		}
+
+		return result;
+	};
+
+	for (let i = 0; i < 20; i++) {
+		const divs = divRange();
+		await ScrimPostRepository.insert({
+			at: date(),
+			isScheduledForFuture: true,
+			maxDiv: divs?.maxDiv,
+			minDiv: divs?.minDiv,
+			teamId: team(),
+			text:
+				faker.number.float(1) > 0.5
+					? faker.lorem.sentences({ min: 1, max: 5 })
+					: null,
+			visibility: null,
+			users: users(),
+			managedByAnyone: true,
+		});
+	}
+
+	const adminPostId = await ScrimPostRepository.insert({
+		at: date(true), // admin's scrim is always at least 1 hour in the future
+		isScheduledForFuture: true,
+		text:
+			faker.number.float(1) > 0.5
+				? faker.lorem.sentences({ min: 1, max: 5 })
+				: null,
+		visibility: null,
+		users: users()
+			.map((u) => ({ ...u, isOwner: 0 }))
+			.concat({ userId: ADMIN_ID, isOwner: 1 }),
+		managedByAnyone: true,
+	});
+	await ScrimPostRepository.insertRequest({
+		scrimPostId: adminPostId,
+		users: users(),
+	});
+	await ScrimPostRepository.insertRequest({
+		scrimPostId: adminPostId,
+		users: users(),
+	});
+}
+
+async function scrimPostRequests() {
+	const allianceRogueMembers = await db
+		.selectFrom(["TeamMember"])
+		.select(["TeamMember.userId"])
+		.where("TeamMember.teamId", "=", 1)
+		.execute();
+
+	for (const id of [1, 5, 12, 14, 19]) {
+		await ScrimPostRepository.insertRequest({
+			scrimPostId: id,
+			users: allianceRogueMembers.map((member) => ({
+				userId: member.userId,
+				isOwner: member.userId === ADMIN_ID ? 1 : 0,
+			})),
+			teamId: 1,
+		});
+	}
+
+	await ScrimPostRepository.acceptRequest(3);
+}
+
+async function associations() {
+	const allUsers = userIdsInRandomOrder(true);
+
+	for (let i = 0; i < 3; i++) {
+		await AssociationRepository.insert({
+			name: faker.company.name(),
+			userId: i === 2 ? allUsers.shift()! : ADMIN_ID,
+		});
+
+		for (
+			let j = 0;
+			j < faker.helpers.arrayElement([4, 6, 8, 10, 12, 24, 32]);
+			j++
+		) {
+			await AssociationRepository.addMember({
+				associationId: i + 1,
+				userId: i === 2 && j === 0 ? ADMIN_ID : allUsers.shift()!,
+			});
+		}
+	}
 }
 
 async function notifications() {
@@ -2378,14 +2547,47 @@ async function notifications() {
 
 	for (let i = 0; i < values.length - 1; i++) {
 		sql
-			.prepare(/* sql */ `
+			.prepare(
+				/* sql */ `
 			update "Notification"
 			set "createdAt" = @createdAt
 			where "id" = @id
-		`)
+		`,
+			)
 			.run({
 				createdAt: dateToDatabaseTimestamp(createdAts[i]),
 				id: i + 1,
 			});
 	}
+}
+
+async function organization() {
+	await TournamentOrganizationRepository.create({
+		ownerId: ADMIN_ID,
+		name: "sendou.ink",
+	});
+
+	await TournamentOrganizationRepository.update({
+		id: 1,
+		name: "sendou.ink",
+		description: "Sendou.ink official tournaments",
+		socials: [
+			"https://bsky.app/profile/sendou.ink",
+			"https://twitch.tv/sendou",
+		],
+		members: [
+			{
+				userId: ADMIN_ID,
+				role: "ADMIN",
+				roleDisplayName: null,
+			},
+			{
+				userId: NZAP_TEST_ID,
+				role: "MEMBER",
+				roleDisplayName: null,
+			},
+		],
+		series: [],
+		badges: [],
+	});
 }

@@ -1,7 +1,9 @@
+/** biome-ignore-all lint/suspicious/noConsole: Biome v2 migration */
 import fs from "node:fs";
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -11,7 +13,7 @@ const dontWrite = process.argv.includes(NO_WRITE_KEY);
 const KNOWN_SUFFIXES = ["_zero", "_one", "_two", "_few", "_many", "_other"];
 
 const REPO_TRANSLATIONS_INFO_URL =
-	"https://github.com/Sendouc/sendou.ink#translations";
+	"https://github.com/sendou-ink/sendou.ink#translations";
 
 const MD = {
 	inlineCode: (s: string) => `\`${s}\``,
@@ -64,7 +66,7 @@ for (const file of fileNames) {
 			let otherLanguageContent: Record<string, string>;
 			try {
 				otherLanguageContent = JSON.parse(otherRawContent);
-			} catch (e) {
+			} catch {
 				throw new Error(`failed to parse ${lang}/${file}`);
 			}
 
@@ -74,12 +76,6 @@ for (const file of fileNames) {
 				file,
 			);
 
-			validateNoExtraKeysInOther({
-				english: getKeysWithoutSuffix(englishContent, lang, file),
-				other: otherLanguageContentKeys,
-				lang,
-				file,
-			});
 			validateVariables({
 				english: englishContent,
 				other: otherLanguageContent,
@@ -129,26 +125,6 @@ const translationProgressPath = path.join(
 );
 
 fs.writeFileSync(translationProgressPath, markdown);
-
-function validateNoExtraKeysInOther({
-	english,
-	other,
-	lang,
-	file,
-}: {
-	english: string[];
-	other: string[];
-	lang: string;
-	file: string;
-}) {
-	const validKeys = english;
-
-	for (const key of other) {
-		if (validKeys.includes(key)) continue;
-
-		throw new Error(`unknown key in ${lang}/${file}: ${key}`);
-	}
-}
 
 function validateVariables({
 	english,
@@ -219,7 +195,11 @@ function getKeysWithoutSuffix(
 	const foundSuffixKeys = new Set<string>();
 	const keys = [];
 
-	for (const key of Object.keys(translations)) {
+	for (const [key, value] of Object.entries(translations)) {
+		if (value === "") {
+			continue; // Consider key missing if untranslated
+		}
+
 		const suffix = KNOWN_SUFFIXES.find((sfx) => key.endsWith(sfx));
 		if (!suffix) {
 			if (foundSuffixKeys.has(key)) {

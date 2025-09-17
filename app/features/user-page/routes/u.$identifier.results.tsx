@@ -1,14 +1,13 @@
-import { useLoaderData, useMatches } from "@remix-run/react";
+import { useLoaderData, useMatches, useSearchParams } from "@remix-run/react";
 import { useTranslation } from "react-i18next";
-import { Button, LinkButton } from "~/components/Button";
+import { LinkButton } from "~/components/elements/Button";
 import { useUser } from "~/features/auth/core/user";
 import { UserResultsTable } from "~/features/user-page/components/UserResultsTable";
-import { useSearchParamState } from "~/hooks/useSearchParamState";
 import invariant from "~/utils/invariant";
 import { userResultsEditHighlightsPage } from "~/utils/urls";
-import type { UserPageLoaderData } from "../../../features/user-page/routes/u.$identifier";
-
+import { SendouButton } from "../../../components/elements/Button";
 import { loader } from "../loaders/u.$identifier.results.server";
+import type { UserPageLoaderData } from "../loaders/u.$identifier.server";
 export { loader };
 
 export default function UserResultsPage() {
@@ -20,18 +19,8 @@ export default function UserResultsPage() {
 	invariant(parentRoute);
 	const layoutData = parentRoute.data as UserPageLoaderData;
 
-	const highlightedResults = data.results.filter(
-		(result) => result.isHighlight,
-	);
-	const hasHighlightedResults = highlightedResults.length > 0;
-
-	const [showAll, setShowAll] = useSearchParamState({
-		defaultValue: !hasHighlightedResults,
-		name: "all",
-		revive: (v) => (!hasHighlightedResults ? true : v === "true"),
-	});
-
-	const resultsToShow = showAll ? data.results : highlightedResults;
+	const [searchParams, setSearchParams] = useSearchParams();
+	const showAll = searchParams.get("all") === "true";
 
 	return (
 		<div className="stack lg">
@@ -43,23 +32,29 @@ export default function UserResultsPage() {
 					<LinkButton
 						to={userResultsEditHighlightsPage(user)}
 						className="ml-auto"
-						size="tiny"
+						size="small"
 					>
 						{t("results.highlights.choose")}
 					</LinkButton>
 				) : null}
 			</div>
-			<UserResultsTable id="user-results-table" results={resultsToShow} />
-			{hasHighlightedResults ? (
-				<Button
+			<UserResultsTable id="user-results-table" results={data.results} />
+			{data.hasHighlightedResults ? (
+				<SendouButton
 					variant="minimal"
-					size="tiny"
-					onClick={() => setShowAll(!showAll)}
+					size="small"
+					onPress={() =>
+						setSearchParams((params) => {
+							params.set("all", showAll ? "false" : "true");
+
+							return params;
+						})
+					}
 				>
 					{showAll
 						? t("results.button.showHighlights")
 						: t("results.button.showAll")}
-				</Button>
+				</SendouButton>
 			) : null}
 		</div>
 	);
